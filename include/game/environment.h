@@ -2,7 +2,6 @@
 #define ENVIRONMENT_9
 
 #define STARS 32
-// #define SUNSIZE 64
 #define SUNSIZE 96
 #define STARSIZE 5
 #define DAWNSIZE 256
@@ -16,7 +15,7 @@ typedef struct
 
 star_struct stars[STARS];
 
-MTL_img *cloudTexture, *sunTexture, *moonTexture, *dawnTexture, *crossHair;
+MTL_img *cloudTexture, *sunTexture, *moonTexture, *crossHair;
 
 int sunX, sunZ;
 int dayTime, nightTime;
@@ -37,5 +36,6 @@ void drawStars(void);
 void drawCloud(void);
 void freeEnvironment(void);
 void initEnvironment(bool menu);
+void drawLogo(void);
 
 #endif

@@ -4,7 +4,7 @@
 #define LADDERTYPE 40
 #define DOORTYPE 44
 
-#define BLOCKTEXTURES 45
+#define BLOCKTEXTURES 75         // 45, 46: crafting table; 47..53: tools and stick (items.png); 54: coal ore; 55: coal (items.png); 56..62: chest; 63..66: furnace; 67: charcoal (items.png); 68: sapling; 69: apple (items.png); 70..74: farmland and pumpkin (75..92: farm.h)
 #define BLOCKS 46
 
 #ifdef FOGLIGHT
@@ -37,13 +37,14 @@
 #define LISTSIZE 4096
 #define SCALEFACTOR 32
 #define tilesize 1
+// quad directions: 0..5 faces, 6..9 crossed planes (torch, plants), 10..13 door
+// and ladder faces, 14..17 a plane through the middle (bent pumpkin stem)
+#define QUAD_DIRECTIONS 18
 #define tilesize2 (tilesize*2)
 #define bsize ((tilesize2*CLUSTERSIZE)<<6)
 #define bsizeR ((tilesize2*CLUSTERSIZE))
 #define max(a,b) ((a)<(b))?(b):(a)
 #define min(a,b) ((a)>(b))?(b):(a)
-#define qgetBlock(m, i, j, k) (m)->data[(i)+(j)*(m)->size.x+(k)*(m)->size.y*(m)->size.x]
-// #define qgetCluster(m, i, j, k) ((i)+(j)*(m)->clusterSize.x+(k)*(m)->clusterSize.y*(m)->clusterSize.x)
 #define qgetCluster(m, i, j, k) ((i)+(j)*SUPERCLUSTERSIZE+(k)*SUPERCLUSTERSIZE*SUPERCLUSTERSIZE)
 
 #define rTilesize ((tilesize*SCALEFACTOR)<<6)
@@ -52,13 +53,6 @@
 #define dir_x (1)
 #define dir_y (1<<1)
 #define dir_z (1<<2)
-
-#define dir_up (1)
-#define dir_down (1<<1)
-#define dir_left (1<<2)
-#define dir_right (1<<3)
-#define dir_front (1<<4)
-#define dir_behind (1<<5)
 
 #define t1 NORMAL_PACK(-32,-32,0)
 #define t2 NORMAL_PACK(-32,32,0)
@@ -83,28 +77,26 @@ typedef struct
 typedef struct
 {
 	s8 i, j, k;
+	u8 level;                      // 14: torch, 13: lit furnace
 	void* next;
 } __attribute__((__packed__)) lightsource_struct;
 
 typedef struct
 {
-	// lightsource_struct *first;//, *last;
-	void *first;//, *last;
+	void *first;
 	u8 count;
 }lightsourceList_struct;
 
 typedef struct
 {
-	// u8 i, j, k;
 	u8 mID;
 	u8 direction, type, light;
-	// u16 lID;
 	void* next;
 } __attribute__((__packed__)) quad_struct;
 
 typedef struct
 {
-	quad_struct *first;//, *last;
+	quad_struct *first;
 	u16 count;
 }quadList_struct;
 
@@ -113,9 +105,6 @@ typedef struct
 	quadList_struct quadList, specialList;
 	lightsourceList_struct lightList;
 	u8 wall;
-	// u8 data[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
-	// u32 draw; //u8
-	// u32* list;
 }cluster_struct;
 
 typedef struct
@@ -130,19 +119,12 @@ typedef struct
 {
 	header_struct* header;
 	vect3D size, clusterSize, offset;
-	// u8* data;
-	// quadList_struct quadList;
-	// cluster_struct* clusterz;
-	// cluster_struct* superCluster[32][32];
 	clusterColumn_struct* superCluster[32][32];
 	clusterColumn_struct* transitionCluster[4*32];
-	// u8 transitionStuff[4*(4*4*4*16)*32];
 	u8 transitionStuff[4*4*4*16];
 	u8 transitioning[4];
-	// u32 clusterDraw[SUPERCLUSTERSIZE*SUPERCLUSTERSIZE*16];
 	u16 clusterDraw[SUPERCLUSTERSIZE*SUPERCLUSTERSIZE*16];
 	u16 clusterDrawn[SUPERCLUSTERSIZE*SUPERCLUSTERSIZE*16];
-	// FILE_POSITION* fileMap;
 	u32* headerMap;
 	u32* fileMap;
 	void* fileHandle;
@@ -152,13 +134,10 @@ typedef struct
 {
 	u16 i, j, k;
 	u8 direction;
-	// void* next;
 }listElement_struct;
 
 typedef struct
 {
-	// listElement_struct* first;
-	// listElement_struct** last;
 	listElement_struct elements[LISTSIZE];
 	u16 size;
 }list_struct;
@@ -171,7 +150,6 @@ typedef struct
 
 typedef struct
 {
-	// toProcess_struct* first;
 	void* first;
 	u16 count;
 }toProcessList_struct;
@@ -179,7 +157,6 @@ typedef struct
 typedef struct
 {
 	u32 pos;
-	// u8 dir;
 } __attribute__((__packed__)) water_struct;
 
 typedef struct
@@ -214,8 +191,7 @@ MTL_img* waterTexture;
 MTL_img* blockSuperTexture;
 MTL_img *crossHair;
 u8 degradTable[8*8*5];
-// u8 lightTable[13*13*13*6];
-u8 lightTable[16*16*16*14];
+u8 lightTable[16*16*16*QUAD_DIRECTIONS];
 u8 lightComputeTable[256*32];
 u8 lightSun[6];
 
@@ -229,15 +205,12 @@ u32* uvMapCur;
 u32* lightMapCur;
 u32 uvMap[256*4];
 u32 uvMapWater[4*6];
-u32 lightMap[256*14];
-u32 lightMap2[256*14];
-u32 xyMap[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE*14*4];
+u32 lightMap[256*QUAD_DIRECTIONS];
+u32 lightMap2[256*QUAD_DIRECTIONS];
+u32 xyMap[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE*QUAD_DIRECTIONS*4];
 u8 imIDtable[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
 u8 jmIDtable[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
 u8 kmIDtable[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
-// u8 imIDtable2[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
-// u16 jmIDtable2[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
-// u16 kmIDtable2[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
 u32 ijkmIDtable2[CLUSTERSIZE*CLUSTERSIZE*CLUSTERSIZE];
 
 quad_struct* cache[CACHESIZE];
@@ -263,12 +236,10 @@ bool writeSectors(u32 sector, u32 number, u8* buffer);
 
 void loadBlockTextures(bool spr, bool tex);
 void initSuperCluster(map_struct* m);
-void generateMapQuadList(map_struct* m);
 void initMap(map_struct* m, vect3D size);
 void addBlock(map_struct* m, int i, int j, int k);
 void fixGap(map_struct* m, int i, int j, int k);
 void renderClusterList(map_struct* m, int x, int y, int z);
-void drawTestCluster(cluster_struct* c, int i, int j, int k);
 
 void (*readClusterColumn)(map_struct*, u16, u16, clusterColumn_struct*, u8*, void*);
 void readClusterColumn2048(map_struct*, u16, u16, clusterColumn_struct*, u8*, void*);
@@ -294,27 +265,11 @@ static inline vect3D getCluster(map_struct* m, int i, int j, int k)
 	return (vect3D){(i-i%CLUSTERSIZE)/CLUSTERSIZE,(j-j%CLUSTERSIZE)/CLUSTERSIZE,(k-k%CLUSTERSIZE)/CLUSTERSIZE};
 }
 
-static inline u32 getClusterID(map_struct* m, int i, int j, int k)
-{
-	vect3D cluster=getCluster(m,i,j,k);
-	return qgetCluster(m,cluster.x,cluster.y,cluster.z);
-}
-
-// static inline u8* getBlockP(map_struct* m, int i, int j, int k)
-// {
-	// if(i<0 || j<0 || k<0/* || i>=m->size.x*/ || j>=m->size.y || k>=m->size.z)return &m->superCluster[0][0][0].data[0];
-	// vect3D cluster=getCluster(m, i, j, k);
-	// i-=cluster.x*CLUSTERSIZE;j-=cluster.y*CLUSTERSIZE;k-=cluster.z*CLUSTERSIZE;
-	// cluster.x-=m->offset.x;cluster.y-=m->offset.y;cluster.z-=m->offset.z;
-	// if(cluster.x<0 || cluster.y<0 || cluster.z<0 || cluster.x>=32 || cluster.y>=32 || cluster.z>=32)return &m->superCluster[0][0][0].data[0];
-	// return &m->superCluster[cluster.x][cluster.y][cluster.z].data[i+j*CLUSTERSIZE+k*CLUSTERSIZE*CLUSTERSIZE];
-// }
-
 static inline u8* getBlockPE(map_struct* m, int i, int j, int k)
 {
-	if(i<0 || j<0 || k<0/* || i>=m->size.x*/ || j>=m->size.y || k>=m->size.z)return &m->superCluster[0][0][0].data[0];
+	if(i<0 || j<0 || k<0 || i>=m->size.x || j>=m->size.y || k>=m->size.z)return &m->superCluster[0][0][0].data[0];
 	vect3D cluster=getCluster(m, i, j, k);
-	i-=cluster.x*CLUSTERSIZE;j-=cluster.y*CLUSTERSIZE;//k-=cluster.z*CLUSTERSIZE;
+	i-=cluster.x*CLUSTERSIZE;j-=cluster.y*CLUSTERSIZE;
 	cluster.x-=m->offset.x;cluster.y-=m->offset.y;cluster.z-=m->offset.z;
 	if((cluster.x<0 && cluster.y<0) || (cluster.x>=32 && cluster.y<0) || (cluster.x>=32 && cluster.y>=32) || (cluster.x<0 && cluster.y>=32) || cluster.x<-1 || cluster.y<-1 || cluster.x>32 || cluster.y>32 || cluster.z<0 || cluster.z>=32)return &m->superCluster[0][0]->data[0];
 	if(cluster.x==-1)return &m->transitionCluster[cluster.y]->data[i+j*CLUSTERSIZE+k*CLUSTERSIZE*CLUSTERSIZE];
@@ -326,9 +281,9 @@ static inline u8* getBlockPE(map_struct* m, int i, int j, int k)
 
 static inline u8* getBlockP(map_struct* m, int i, int j, int k)
 {
-	if(i<0 || j<0 || k<0/* || i>=m->size.x*/ || j>=m->size.y || k>=m->size.z)return &m->superCluster[0][0][0].data[0];
+	if(i<0 || j<0 || k<0 || i>=m->size.x || j>=m->size.y || k>=m->size.z)return &m->superCluster[0][0][0].data[0];
 	vect3D cluster=getCluster(m, i, j, k);
-	i-=cluster.x*CLUSTERSIZE;j-=cluster.y*CLUSTERSIZE;//k-=cluster.z*CLUSTERSIZE;
+	i-=cluster.x*CLUSTERSIZE;j-=cluster.y*CLUSTERSIZE;
 	cluster.x-=m->offset.x;cluster.y-=m->offset.y;cluster.z-=m->offset.z;
 	if(cluster.x<0 || cluster.y<0 || cluster.z<0 || cluster.x>=32 || cluster.y>=32 || cluster.z>=32)return &m->superCluster[0][0]->data[0];
 	return &m->superCluster[cluster.x][cluster.y]->data[i+j*CLUSTERSIZE+k*CLUSTERSIZE*CLUSTERSIZE];
@@ -349,40 +304,39 @@ static inline bool isOpenDoor(u8 t)
 	return (t>=DOORTYPE+8 && t<DOORTYPE+16);
 }
 
-static inline bool transparent(map_struct* m, int i, int j, int k)
-{
-	u8 t=*getBlockP(m,i,j,k);
-	return (t==0 || t>=WATERTYPE || t==12 || t==13 || isLadder(t) || isDoor(t));
-}
+#include "game/blockids.h"
 
 static inline bool transparent2(map_struct* m, int i, int j, int k, int i2, int j2, int k2)
 {
 	const u8 t=*getBlockP(m,i2,j2,k2);
 	const u8 tt=*getBlockP(m,i,j,k);
-	return ((t==0 || t>=WATERTYPE || t==12 || t==13 || isLadder(t) || isDoor(t)) && (!(t==tt || (t>=WATERTYPE && tt>=WATERTYPE))));
+	return ((t==0 || t>=WATERTYPE || t==12 || t==13 || isPlant(t) || isLadder(t) || isDoor(t)) && (!(t==tt || (t>=WATERTYPE && tt>=WATERTYPE))));
 }
 
 static inline bool transparent3(map_struct* m, int i, int j, int k, int i2, int j2, int k2)
 {
 	const u8 t=*getBlockPE(m,i2,j2,k2);
 	const u8 tt=*getBlockPE(m,i,j,k);
-	return ((t==0 || t>=WATERTYPE || t==12 || t==13 || isLadder(t) || isDoor(t)) && (!(t==tt || (t>=WATERTYPE && tt>=WATERTYPE))));
+	return ((t==0 || t>=WATERTYPE || t==12 || t==13 || isPlant(t) || isLadder(t) || isDoor(t)) && (!(t==tt || (t>=WATERTYPE && tt>=WATERTYPE))));
 }
 
 static inline bool solid(u8 type)
 {
-	return (type && type<WATERTYPE && type!=13 && !isLadder(type) && !isOpenDoor(type));
+	return (type && type<WATERTYPE && type!=13 && !isPlant(type) && !isLadder(type) && !isOpenDoor(type));
 }
 
 static inline bool block(u8 type)
 {
-	return (type && type!=13 && !isLadder(type) && !isDoor(type));
+	return (type && type!=13 && !isPlant(type) && !isLadder(type) && !isDoor(type));
 }
 
 static inline bool tangible(u8 type)
 {
 	return (type && type<WATERTYPE);
 }
+
+// light tables are made for a torch (level 14); dimmer sources scale them
+static inline u8 lightScale(u8 v, u8 level){ return level>=14?v:(u8)(v*level/14); }
 
 static inline void getLightWC(map_struct* m, int i, int j, int k, u8* light, u8 direction, lightsource_struct* q)
 {
@@ -394,17 +348,12 @@ static inline void getLightWC(map_struct* m, int i, int j, int k, u8* light, u8 
 		u8 i2=-(i%CLUSTERSIZE)+q->i+8;
 		u8 j2=-(j%CLUSTERSIZE)+q->j+8;
 		u8 k2=-(k%CLUSTERSIZE)+q->k+8;
-		// if(i2>0 && j2>0 && k2>0 && i2<13 && j2<13 && k2<13)
 		{
-			// *light|=min(((*light)&127)+lightTable[i2*6+j2*6*13+k2*6*13*13+direction],127)&127;
-			// *light=min((*light)+lightTable[i2*8+j2*8*16+k2*8*16*16+direction],127);
-			*light=min((*light)+lightTable[i2+j2*16+k2*16*16+d],127);
+			*light=min((*light)+lightScale(lightTable[i2+j2*16+k2*16*16+d],q->level),127);
 		}
-		// NOGBA("t");
 		q=q->next;
 	}
 	(*light)|=s;
-		// NOGBA("d");
 }
 
 static inline void getLight(map_struct* m, int i, int j, int k, u8* light, u8 direction)
@@ -438,7 +387,7 @@ static inline void surface(map_struct* m, int i, int j, int k, u8* light) //A OP
 
 static inline bool seeThrough(u8 type)
 {
-	return (!type || type>=WATERTYPE || type==13 || type==12 || isLadder(type) || isOpenDoor(type) || type==10);
+	return (!type || type>=WATERTYPE || type==13 || type==12 || isLadder(type) || isOpenDoor(type) || isPlant(type) || isLeaves(type));
 }
 
 static inline void surface2(map_struct* m, int i, int j, int k, u8* light) //A OPTIMISER
@@ -460,7 +409,6 @@ void cacheAllocateBlock(void);
 
 static inline quad_struct* getQuad(void)
 {
-	// NOGBA("get ! %d",cacheNumber);
 	if(!cacheNumber)cacheAllocateBlock();
 	cacheCursor++;
 	cacheNumber--;
@@ -483,7 +431,21 @@ static inline void releaseQuad(quad_struct** q)
 
 void drawTestMap(map_struct* m);
 void globalSaveMap(map_struct* m);
-void createTestMap(map_struct* m);
+void lightSourceOn(map_struct* m, int i, int j, int k);              // the block at i,j,k now gives light
+void plantRefresh(map_struct* m, int i, int j, int k, u8 type);      // a plant's id changed (stage, bent stem)
+void lightSourceOff(map_struct* m, int i, int j, int k, u8 level);   // it stopped giving light
 void translateSuperCluster(map_struct* m, u8 dir);
+void initFilesystem(void);
+void loadTestMap(map_struct* m);
+void freeMap(map_struct* m);
+void freeQuadCache(void);
+void freeLightCache(void);
+void drawTestCube(void);
+void setFog(u8 mode);
+void updateLightMap(void);
+bool addWater(map_struct* m, u16 i, u16 j, u16 k, u8 t);
+void changeBlock(map_struct* m, int i, int j, int k, u8 type);
+void removeBlock(map_struct* m, int i, int j, int k, bool fix);
+void addQuad(quadList_struct* ql, map_struct* m, u8 direction, u8 light, u32 bid, u8* data, u16 i, u16 j, u16 k);
 
 #endif

@@ -2,8 +2,6 @@
 
 void DS_InitHardware(void)
 {
-	// irqEnable(IRQ_VBLANK);
-	// irqSet(IRQ_VBLANK, 0);
 	defaultExceptionHandler();
 	glInit();
 }
@@ -55,13 +53,6 @@ void DS_CreateState(DS_state* state, function Init, function Frame, function Kil
 	state->id=state_id;
 	state->mc_id=0;
 	state_id++;
-}
-
-void DS_SetState(DS_state* state)
-{
-	CurrentState=state;
-	CurrentState->used=1;
-	//irqSet(IRQ_VBLANK, CurrentState->VBlank);
 }
 
 void DS_ApplyState()

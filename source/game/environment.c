@@ -1,8 +1,6 @@
 #include "game/game_main.h"
 
-// #define LOGOSIZE 128
 #define LOGOSIZE 96
-#define sunmacro(a,b) (((a)<(b))?(0):(a))
 
 u32* starsList;
 
@@ -45,9 +43,6 @@ void initEnvironment(bool menu)
 	glareR=25;glareG=16;glareB=6;
 	initStars();
 	cloudTexture=Game_CreateTexture("clouds.pcx", "textures");
-	// dawnTexture=Game_CreateTexture("dawndusk.pcx", "textures");
-	// sunTexture=Game_CreateTexture("sun.pcx", "textures");
-	// moonTexture=Game_CreateTexture("moon.pcx", "textures");
 	
 	unsigned char* buffer;
 	unsigned char* image;
@@ -66,10 +61,7 @@ void initEnvironment(bool menu)
 	alpha=malloc(decoder.infoPng.height*decoder.infoPng.width);
 	for(i=0;i<decoder.infoPng.width;i++)for(j=0;j<decoder.infoPng.height;j++)
 	{
-		// if(image[(i+j*decoder.infoPng.width)*4]/8<2 && image[(i+j*decoder.infoPng.width)*4+1]/8<2 && image[(i+j*decoder.infoPng.width)*4+2]/8<2)alpha[i+j*decoder.infoPng.width]=0;
-		// else alpha[i+j*decoder.infoPng.width]=max(31-(sunmacro(f32toint(sqrtf32(inttof32((i-32)*(i-32)+(j-32)*(j-32)))),13)*31/20),0);
 		alpha[i+j*decoder.infoPng.width]=min(image[(i+j*decoder.infoPng.width)*4]/8,31);
-		// NOGBA("alpha : %d",alpha[i+j*decoder.infoPng.width]);
 	}
 	chdir(path);
 	free(image);
@@ -84,10 +76,7 @@ void initEnvironment(bool menu)
 		
 	for(i=0;i<decoder.infoPng.width;i++)for(j=0;j<decoder.infoPng.height;j++)
 	{
-		// if(image[(i+j*decoder.infoPng.width)*4]/8<2 && image[(i+j*decoder.infoPng.width)*4+1]/8<2 && image[(i+j*decoder.infoPng.width)*4+2]/8<2)alpha[i+j*decoder.infoPng.width]=0;
-		// else alpha[i+j*decoder.infoPng.width]=max(31-(sunmacro(f32toint(sqrtf32(inttof32((i-32)*(i-32)+(j-32)*(j-32)))),13)*31/20),0);
 		alpha[i+j*decoder.infoPng.width]=min(image[(i+j*decoder.infoPng.width)*4]/8,31);
-		// NOGBA("alpha : %d",alpha[i+j*decoder.infoPng.width]);
 	}
 	chdir(path);
 	free(image);
@@ -101,40 +90,19 @@ void initEnvironment(bool menu)
 
 void drawStars(void)
 {
-	// int i;
 	u8 a=((nightTime*31)/4096);
 	if(!a)return;
 	glPushMatrix();
-	// glPolyFmt(POLY_ALPHA(a) | POLY_CULL_NONE);
 	glPolyFmt(POLY_ALPHA(a) | POLY_CULL_BACK | POLY_ID(1));
 	glScalef32(inttof32(SCALEFACTOR*15),inttof32(SCALEFACTOR*15),inttof32(SCALEFACTOR*15));
 	Game_ApplyMTL(NULL);
 	glColor3b(255,255,255);
 	glCallList(starsList);
-	/*glBegin(GL_QUADS);
-	for(i=0;i<STARS;i++)
-	{
-		// glPushMatrix();
-			// glRotateZi(stars[i].angle.z+8192);
-			// glRotatef32i(stars[i].angle.x,cosLerp(0),sinLerp(0),0);
-			// glTranslatef32(0,inttof32(15),0);
-			// glBegin(GL_QUADS);
-				// GFX_VERTEX10 = NORMAL_PACK((stars[i].size),(0),(-stars[i].size));
-				// GFX_VERTEX10 = NORMAL_PACK((stars[i].size),(0),(stars[i].size));
-				// GFX_VERTEX10 = NORMAL_PACK((-stars[i].size),(0),(stars[i].size));
-				// GFX_VERTEX10 = NORMAL_PACK((-stars[i].size),(0),(-stars[i].size));
-				GFX_VERTEX10 = NORMAL_PACK(((mulf32(cosLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(stars[i].size)),((mulf32(sinLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(-stars[i].size)),((-sinLerp(stars[i].angle.x)>>3)));
-				GFX_VERTEX10 = NORMAL_PACK(((mulf32(cosLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(stars[i].size)),((mulf32(sinLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(stars[i].size)),((-sinLerp(stars[i].angle.x)>>3)));
-				GFX_VERTEX10 = NORMAL_PACK(((mulf32(cosLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(-stars[i].size)),((mulf32(sinLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(stars[i].size)),((-sinLerp(stars[i].angle.x)>>3)));
-				GFX_VERTEX10 = NORMAL_PACK(((mulf32(cosLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(-stars[i].size)),((mulf32(sinLerp(stars[i].angle.z+8192),cosLerp(stars[i].angle.x))>>3)+(-stars[i].size)),((-sinLerp(stars[i].angle.x)>>3)));
-		// glPopMatrix(1);
-	}*/
 	glPopMatrix(1);
 }
 
 void drawCloud()
 {
-	// glBindTexture(0, 0);
 	glPolyFmt(POLY_ALPHA(3+((31-3)*dayTime)/4096) | POLY_CULL_BACK | POLY_ID(11));
 	glPushMatrix();
 	glScalef32(inttof32(SCALEFACTOR),inttof32(SCALEFACTOR),inttof32(SCALEFACTOR));
@@ -153,17 +121,15 @@ void drawCloud()
 
 		glEnd();
 	glPopMatrix(1);
-	cloudcnt++;
+	if(!gamePaused)cloudcnt++;
 	if(cloudcnt>16*(256))cloudcnt-=16*(256);
 }
 
 void drawLogo()
 {
-	// glBindTexture(0, 0);
 	glPolyFmt(POLY_ALPHA(20) | POLY_CULL_BACK | POLY_ID(41));
 	glPushMatrix();
 	glScalef32(inttof32(SCALEFACTOR),inttof32(SCALEFACTOR),inttof32(SCALEFACTOR));
-		// Game_ApplyMTL(cloudTexture);
 		glColor3b(255,255,255);
 		glBegin(GL_QUADS);
 			//top
@@ -183,23 +149,15 @@ void drawLogo()
 
 void drawSun()
 {
-	sunX+=3;
+	if(!gamePaused)sunX+=3;      // time stands still in the game menu
 	dayTime=((sunX<16384)?(8192-abs(sunX-8192)):0);
 	dayTime=(dayTime<4096)?(dayTime):4096;
-	// glPolyFmt(POLY_ALPHA(31) /*| POLY_FORMAT_LIGHT0 | POLY_FORMAT_LIGHT1*/ | POLY_CULL_NONE);
 	glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK | POLY_ID(31));
 	glPushMatrix();
 	glScalef32(inttof32(SCALEFACTOR),inttof32(SCALEFACTOR),inttof32(SCALEFACTOR));
-		// glScalef32(inttof32(8),inttof32(8),inttof32(1));
-		// glTranslatef32(-(mulf32(sinLerp(sunZ),cosLerp(sunX))), -(mulf32(cosLerp(sunZ),cosLerp(sunX))), -(-(sinLerp(sunX))));
-		// glRotateXi(-sunX);
 		glRotateZi(sunZ+8192);
-		// glRotatef32i(-sunX,cosLerp(-sunZ+8192),sinLerp(-sunZ+8192),0);
-		// glRotatef32i(-sunX,cosLerp(8192),sinLerp(8192),0);
 		glRotatef32i(sunX,cosLerp(0),sinLerp(0),0);
-		// glTranslatef32(inttof32(1),0,0);
 		glTranslatef32(0,inttof32(7),0);
-		// Game_ApplyMTL(NULL);
 		Game_ApplyMTL(sunTexture);
 		glColor3b(255,255,255);
 		glBegin(GL_QUADS);	
@@ -237,9 +195,7 @@ void drawSun()
 			lightSun[5]=min(max(f32toint(MOONLIGHT*lightDir.x),0),31);
 			lightSun[4]=min(max(f32toint(MOONLIGHT*(-lightDir.x)),0),31);
 		}
-		// PROF_START();
 		updateLightMap();
-		// PROF_END(TESTVALUE);
 	}
 }
 
@@ -248,29 +204,21 @@ void drawDawn()
 	if(!dayTime || dayTime>1024+512)return;
 	if(dayTime<1024+512)glareLength=(31*(((1024+512)/2)-abs(((1024+512)/2)-dayTime)))/((1024+512)/2);
 	else glareLength=0;
-	// glPolyFmt(POLY_ALPHA(31) | POLY_CULL_BACK);
 	glPolyFmt(POLY_ALPHA(31) | POLY_CULL_FRONT);
 	glPushMatrix();
 	glScalef32(inttof32(SCALEFACTOR),inttof32(SCALEFACTOR),inttof32(SCALEFACTOR));
 	u16 dawnHeight=(DAWNSIZE+96)*glareLength/31;
-	// NOGBA("height : %d",dawnHeight);
 		glRotateZi(sunZ+8192);
 		if(sunX<1024+512)glRotatef32i(min(sunX,256),cosLerp(0),sinLerp(0),0);
-		// else if(sunX>16384-1024)glRotatef32i(max(sunX,16384-256),cosLerp(0),sinLerp(0),0);
 		else if(sunX>16384-(1024+512))glRotateZi(8192*2);
 		glTranslatef32(0,inttof32(15),0);
 		glScalef32(inttof32(6),inttof32(6),inttof32(6));
 		Game_ApplyMTL(NULL);
-		// glColor3b(255,255,255);
 		glBegin(GL_QUAD_STRIP);	
 			glColor(RGB15(glareR,glareG,glareB));
 			GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE*2),(-DAWNSIZE),(-DAWNSIZE/3));
 			glColor(RGB15(skyR,skyG,skyB));
 			GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE*2),(-DAWNSIZE),(-(DAWNSIZE)/3)+8);
-			// glColor(RGB15(glareR,glareG,glareB));
-			// GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE-DAWNSIZE/2),(-DAWNSIZE/2),(-DAWNSIZE/2));
-			// glColor(RGB15(skyR,skyG,skyB));
-			// GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE-DAWNSIZE/2),(-DAWNSIZE/2),((DAWNSIZE)/4));
 			
 			glColor(RGB15(glareR,glareG,glareB));
 			GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE),(0),(-DAWNSIZE/3));
@@ -285,25 +233,12 @@ void drawDawn()
 			glColor(RGB15(skyR,skyG,skyB));
 			GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE),(0),((dawnHeight)/3));
 			
-			// glColor(RGB15(glareR,glareG,glareB));
-			// GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE+DAWNSIZE/2),(-DAWNSIZE/2),(-DAWNSIZE/2));
-			// glColor(RGB15(skyR,skyG,skyB));
-			// GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE+DAWNSIZE/2),(-DAWNSIZE/2),((DAWNSIZE)/4));
 			glColor(RGB15(glareR,glareG,glareB));
 			GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE*2-1),(-DAWNSIZE),(-DAWNSIZE/3));
 			glColor(RGB15(skyR,skyG,skyB));
 			GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE*2-1),(-DAWNSIZE),(-DAWNSIZE/3+8));
 			
 			
-			// GFX_TEX_COORD = TEXTURE_PACK(16*(128), 16*(128));
-			// GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE),(0),(-DAWNSIZE/2));
-			// GFX_TEX_COORD = TEXTURE_PACK(16*(128), 16*0);
-			// GFX_VERTEX10 = NORMAL_PACK((DAWNSIZE),(0),((DAWNSIZE)/2));
-			// GFX_TEX_COORD = TEXTURE_PACK(16*(0), 16*0);
-			// GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE),(0),((DAWNSIZE)/2));
-			// GFX_TEX_COORD = TEXTURE_PACK(16*(0), 16*(128));
-			// GFX_VERTEX10 = NORMAL_PACK((-DAWNSIZE),(0),(-DAWNSIZE/2));
-
 		glEnd();
 	glPopMatrix(1);
 }

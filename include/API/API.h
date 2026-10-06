@@ -8,18 +8,6 @@ typedef struct
 	s32 x, y;
 }coord2Ds;
 
-typedef struct
-{
-	u32 x, y;
-}coord2Du;
-
-typedef struct
-{
-	u8* data;
-	u8 charsizeX, charsizeY;
-	u8 difference;
-}API_Font;
-
 typedef struct API_Entity
 {
 	u16 id, type;
@@ -66,7 +54,6 @@ typedef struct
 
 typedef struct
 {
-	// MTL_img *background;
 	char* string;
 	u16 width;
 	u16 color;
@@ -112,40 +99,29 @@ typedef struct
 
 bool cull;
 bool API_DrawingOutline;
-API_Font API_font;
 API_EntList API_List;
 touchPosition API_Touch;
 
 API_Entity* buttonBlock;
 
-API_Entity *window1, *window2, *window3, *window4, *window5, *window6, *window7, *window8, *window9, *installWindow, *descriptionWindow, *replayWindow, *replayWindow2; //TEMP
 
 API_function API_ToCall;
 API_Entity* API_ToCallEntity;
 API_Entity* Cursor;
 API_Entity* DefaultCursor;
 
-API_Entity* TESTLABEL;
 
 void APIcall();
 void API_Init();
 void API_CleanUp();
-void API_SetX(API_Entity* e, s16 x);
-void API_ToggleShadow(API_Entity* e);
 void API_UpdateScene(API_EntList *cl);
+void API_ComputeDirections(API_EntList *cl, u8 force);
 void API_SetAlpha(API_Entity* e, u8 alpha);
-void API_SetSize(API_Entity* e, u16 x, u16 y);
 void API_SetAlphaSons(API_Entity* f, u8 alpha);
 void API_SetPosition(API_Entity* e, s16 x, s16 y);
-void API_FadeSons(API_Entity* f, u8 alpha, u8 time);
-void API_FadeEntity(API_Entity* e, u8 alpha, u8 time);
-void API_MoveEntity(API_Entity* e, s16 x, s16 y, u8 time);
-void API_ResizeEntity(API_Entity* e, u16 x, u16 y, u8 time);
-void API_DeleteEntityByFather(API_EntList *cl, API_Entity* father);
 API_Entity* API_CreateLabel(s16 x, s16 y, u16 color, char* text);
 API_Entity* API_CreateLabelFather(s16 x, s16 y, u16 color, API_Entity* father, char* text, bool halpha);
 API_Entity* API_CreateCheckBoxFather(s16 x, s16 y, API_function function, API_Entity* father, char* text, bool halpha);
-API_Entity* API_CreateSliderFather(s16 x, s16 y, u8 size, API_function function, API_Entity* father, char* text, bool halpha);
 API_Entity* API_CreateVSliderFather(s16 x, s16 y, u8 size, API_function function, API_Entity* father, char* text, bool halpha);
 API_Entity* API_CreateWindow(s16 x, s16 y, u16 sx, u16 sy, u8 alpha, u16 color, u8 outline, u16 outline_color, char* filename);
 API_Entity* API_CreateButtonFather(s16 x, s16 y, u16 color, API_function function, API_Entity* father, char* text, char* filename, bool halpha);

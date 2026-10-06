@@ -9,7 +9,7 @@ typedef struct
 	u8 charsize;
 }font;
 
-font hudFont, APIfont;
+font APIfont;
 font* currentFont;
 
 void setFont(font* f);

@@ -1,0 +1,7 @@
+build/
+*.elf
+*.nds
+*.map
+tests/survival/test_survival
+tests/survival/test_survival.exe
+__pycache__/

@@ -9,6 +9,9 @@ typedef struct
 	vect3D position, vector, clusterCoord;
 	s16 angleZ, angleX;
 	u8 inWater, onLadder, inCave;
+	bool sneaking, sprinting, flying;   // SELECT; forward twice; jump twice (creative)
+	bool jumpHeld;                      // ascends while flying
+	int32 flyVX, flyVY;                 // flight keeps momentum
 }player_struct;
 
 typedef struct
@@ -20,8 +23,11 @@ typedef struct
 settings_struct gameSettings;
 
 void loadSettings(void);
+void saveSettings(void);
+void testPlane(map_struct* m, vect3D point, vect3D* vector);
 void initPlayer(player_struct* p);
 void updatePlayer(player_struct* p);
+float playerFov(void);
 void playerCamera(player_struct* p, bool environment);
 vect3D getPointBlockPos(map_struct* m, int32 i, int32 j, int32 k);
 

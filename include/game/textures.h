@@ -78,16 +78,17 @@ static inline void Game_FastBind(MTL_img *mtl)
 }
 
 void Game_InitTextures();
-void* Game_LoadPalettePCX(char* filename, char* directory);
 MTL_img* Game_CreateTexture(char* filename, char* directory);
 MTL_img* Game_CreateTextureBuffer16(u16* buffer, u16 x, u16 y, bool cpy);
 void Game_LoadTexturePCX(char* filename, char* directory, MTL_img *mtl);
-MTL_img* Game_CreateTextureBuffer(u8* buffer, u16* buffer2, u16 x, u16 y);
 MTL_img* Game_CreateTextureAlpha(char* filename, char* directory, u8 alpha);
+MTL_img* Game_CreateAlphaMask(char* filename, char* directory);
+MTL_img* Game_CreateTextureAlphaMask(char* filename, char* directory, u8* alpha);
+void Game_LoadAlphaTexture(char* filename, char* directory, MTL_img *mtl, u8 alpha);
+void Game_LoadAlphaMask(char* filename, char* directory, MTL_img *mtl);
+void Game_LoadAlphaMaskTexture(char* filename, char* directory, MTL_img *mtl, u8* alpha);
+void freePCX(struct gl_texture_t * pcx);
 void Game_LoadTextureBuffer16(u16* buffer, u16 x, u16 y, MTL_img *mtl, bool genaddr, bool cpy);
-void Game_LoadTextureBuffer(u8* buffer, u16* buffer2, u16 x, u16 y, MTL_img *mtl);
-void Game_GenerateRipple(MTL_img *mtl);
-void Game_GenerateDegrad(MTL_img *mtl);
 void Game_ApplyMTL(MTL_img *mtl);
 void Game_InitVramBanks(u8 banks);
 void Game_GetVramStatus();

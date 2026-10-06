@@ -12,10 +12,6 @@
 extern u8 __end__[];        // end of static code and data
 extern u8 __eheap_end[];    // farthest point to which the heap will grow
 
-u8 *getHeapStart() {
-	return __end__;
-}
-
 u8 *getHeapEnd() {
 	return (u8 *)sbrk(0);
 }

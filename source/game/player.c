@@ -1,19 +1,13 @@
 #include "game/game_main.h"
 
-#define sign(a) (((a)==0)?(0):(((a)<0)?(-1):(1)))
-#define positive(a) (((a)>0)?(1):(0))
-
 bool IntersectedPolygon(vect3D* vPoly, vect3D* vLine, int verticeCount, int32* originDistance, int32* realDist);
 vect3D ClosestPointOnLine(vect3D vA, vect3D vD, int length, int32* dist, vect3D vPoint);
 int32 sqMagnitude(vect3D vNormal);
 int32 sqDistance(vect3D vA, vect3D vB);
-void testPoint(map_struct* m, vect3D point, vect3D* vector);
 u8 getPointBlock(map_struct* m, int32 i, int32 j, int32 k);
 
 void initPlayer(player_struct* p)
 {
-	// p->position=(vect3D){0,0,inttov16(0)};
-	// p->position=(vect3D){0,0,(getHighest(&map, SUPERCLUSTERSIZE*CLUSTERSIZE/2, SUPERCLUSTERSIZE*CLUSTERSIZE/2)+3-map.size.z/2)*rTilesize2};
 	p->position=(vect3D){(map.header->spawnX-(map.offset.x+SUPERCLUSTERSIZE/2)*CLUSTERSIZE)*rTilesize2,(map.header->spawnY-(map.offset.y+SUPERCLUSTERSIZE/2)*CLUSTERSIZE)*rTilesize2,(getHighest(&map, map.header->spawnX, map.header->spawnY)+3-map.size.z/2)*rTilesize2};
 	if(map.header->magicVersionNumber==VERSIONMAGIC)p->position.z=map.header->spawnZ;
 	NOGBA("player pos : %d %d",p->position.x,p->position.y,p->position.z);
@@ -22,6 +16,8 @@ void initPlayer(player_struct* p)
 	p->angleX=0;
 	p->inWater=false;
 	p->onLadder=false;
+	p->sneaking=p->sprinting=p->flying=p->jumpHeld=false;
+	p->flyVX=p->flyVY=0;
 	cursorBlock=1;
 	gravityDiv=1;
 	noclip=false;
@@ -173,86 +169,101 @@ s8 clusterCheck(map_struct* m, vect3D* line, int i, int j, int k)
 			}
 		}
 	}
-	// NOGBA("\ntlf : %d  ",t);
 	return dir;
+}
+
+// Movement as in Minecraft (1.8, when sprinting and flying came in):
+// sneaking moves at 0.3 of the speed and does not step off an edge, sprinting
+// at 1.3; creative flight keeps momentum (friction 0.91 per 20 Hz tick, here
+// 0.939 per 30 Hz update) for about 11 blocks a second, twice when sprinting,
+// and goes up and down at 7.5 blocks a second (vertical friction 0.6 per tick).
+
+#define FEET 6000                  // the lowest collision point, below the eyes
+#define SNEAK_EYE 328              // the eyes drop 0.08 blocks when sneaking
+
+static float fov=70;
+static int32 eyeDrop;
+
+float playerFov(void)
+{
+	return fov;
+}
+
+// some ground under one of the four corners of the feet
+static bool groundAt(map_struct* m, int32 x, int32 y, int32 z)
+{
+	int32 f=z-FEET-512;
+	return solid(getPointBlock(m,x+BBSIZE,y+BBSIZE,f)) || solid(getPointBlock(m,x-BBSIZE,y+BBSIZE,f))
+	    || solid(getPointBlock(m,x+BBSIZE,y-BBSIZE,f)) || solid(getPointBlock(m,x-BBSIZE,y-BBSIZE,f));
+}
+
+static void moveModifiers(map_struct* m, player_struct* p)
+{
+	if(noclip)return;
+	if(p->sneaking){p->vector.x=p->vector.x*3/10;p->vector.y=p->vector.y*3/10;}
+	if(p->flying)
+	{
+		// the controls give the wish at walking speed (512 a step)
+		int acc=p->sprinting?184:92;
+		p->flyVX=p->flyVX*939/1000+p->vector.x*acc/512;
+		p->flyVY=p->flyVY*939/1000+p->vector.y*acc/512;
+		p->vector.x=p->flyVX;
+		p->vector.y=p->flyVY;
+		p->vector.z=p->vector.z*711/1000+(p->jumpHeld?296:0)-(p->sneaking?296:0);
+		return;
+	}
+	p->flyVX=p->flyVY=0;
+	if(p->sprinting){p->vector.x=p->vector.x*13/10;p->vector.y=p->vector.y*13/10;}
+	// sneaking: no stepping off an edge, one axis at a time as Minecraft tests it
+	if(p->sneaking && !p->inWater && !p->onLadder && groundAt(m,p->position.x,p->position.y,p->position.z))
+	{
+		if(!groundAt(m,p->position.x+p->vector.x,p->position.y,p->position.z))p->vector.x=0;
+		if(!groundAt(m,p->position.x+p->vector.x,p->position.y+p->vector.y,p->position.z))p->vector.y=0;
+	}
 }
 
 void updatePlayer(player_struct* p)
 {
 	vect3D lineOfSight=(vect3D){mulf32(sinLerp(Player.angleZ),cosLerp(Player.angleX)),mulf32(cosLerp(Player.angleZ),cosLerp(Player.angleX)),-sinLerp(Player.angleX)};
-	vect3D testLine[2];//, testPoly[4];
+	vect3D testLine[2];
 	int i, j, k;
-	// i=testCursorI-(map.size.x)/2;
-	// j=testCursorJ-(map.size.y)/2;
-	// k=testCursorK-(map.size.z)/2;
-	// testPoly[0].x=(rTilesize2*i-rTilesize);testPoly[0].y=(rTilesize2*j-rTilesize);testPoly[0].z=(rTilesize2*k+rTilesize);
-	// testPoly[1].x=(rTilesize2*i+rTilesize);testPoly[1].y=(rTilesize2*j-rTilesize);testPoly[1].z=(rTilesize2*k+rTilesize);
-	// testPoly[2].x=(rTilesize2*i+rTilesize);testPoly[2].y=(rTilesize2*j+rTilesize);testPoly[2].z=(rTilesize2*k+rTilesize);
-	// testPoly[3].x=(rTilesize2*i-rTilesize);testPoly[3].y=(rTilesize2*j+rTilesize);testPoly[3].z=(rTilesize2*k+rTilesize);
 	
 	testLine[0]=p->position;
 	testLine[1]=p->position;
 	testLine[1].x+=lineOfSight.x*32;testLine[1].y+=lineOfSight.y*32;testLine[1].z+=lineOfSight.z*32;
 	
-		// glBegin(GL_QUAD);
-			// glColor3b(255,0,0);
-			// glVertex3v16(testPoly[0].x,testPoly[0].y,testPoly[0].z);
-			// glVertex3v16(testPoly[1].x,testPoly[1].y,testPoly[1].z);
-			// glVertex3v16(testPoly[2].x,testPoly[2].y,testPoly[2].z);
-			// glVertex3v16(testPoly[3].x,testPoly[3].y,testPoly[3].z);
-		// glEnd();
-		// glBegin(GL_TRIANGLE);
-			// glColor3b(0,255,0);
-			// glVertex3v16(testLine[0].x,testLine[0].y,testLine[0].z);
-			// glVertex3v16(testLine[1].x,testLine[1].y,testLine[1].z);
-			// glVertex3v16(testLine[1].x,testLine[1].y,testLine[1].z);
-		// glEnd();
-	
-	// bool test=IntersectedPolygon(testPoly, testLine, 4);
 	map_struct* m=&map;
-	quad_struct* q=NULL;
-	/*for(i=0;i<10 && i<closedList.size && !q;i++)
-	{
-		listElement_struct* le=&closedList.elements[i];
-		q=clusterCheck(m, &m->cluster[qgetCluster(m,le->i,le->j,le->k)], testLine);
-		if(q)
-		{
-			testCursor=q->blockID;
-			cursorDir=q->direction;
-		}
-	}*/
 	int pi, pj, pk;
-	pi=Player.position.x/(rTilesize2);//+(m->size.x)/2;
-	pj=Player.position.y/(rTilesize2);//+(m->size.y)/2;
-	pk=Player.position.z/(rTilesize2);//+(m->size.z)/2;
+	pi=Player.position.x/(rTilesize2);
+	pj=Player.position.y/(rTilesize2);
+	pk=Player.position.z/(rTilesize2);
 	vect3D r;
 	int32 sqrTilesize=2*mulf32(rTilesize,rTilesize);
 	int32 mindist=inttof32(7);
 	int32 dist;
 	bool got=false;
-	PROF_START(); //PROBLEEEEEEMES (superclustersize etc.)
 	for(i=pi-3;i<=pi+3;i++)
 	{
 		for(j=pj-3;j<=pj+3;j++)
 		{
 			for(k=pk-3;k<=pk+3;k++)
 			{
-				if(tangible(*getBlockP(m, i+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.x*CLUSTERSIZE, j+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.y*CLUSTERSIZE, k+m->size.z/2+m->offset.z*CLUSTERSIZE)))
+				int gi=i+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.x*CLUSTERSIZE;
+				int gj=j+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.y*CLUSTERSIZE;
+				int gk=k+m->size.z/2+m->offset.z*CLUSTERSIZE;
+				// outside the world getBlockP returns a stand-in block: never target it
+				if(gi<0 || gj<0 || gk<0 || gi>=m->size.x || gj>=m->size.y || gk>=m->size.z)continue;
+				if(tangible(*getBlockP(m, gi, gj, gk)))
 				{
 					vect3D center=(vect3D){(i)*rTilesize2,(j)*rTilesize2,(k)*rTilesize2};
-					// vect3D center=(vect3D){(((i)-m->offset.x*CLUSTERSIZE)*(rTilesize2))-(m->size.x*rTilesize2)/2-(tilesize<<6)*SCALEFACTOR,
-					// (((j)-m->offset.y*CLUSTERSIZE)*(rTilesize2))-(m->size.y*rTilesize2)/2-(tilesize<<6)*SCALEFACTOR,
-					// (((k)-m->offset.z*CLUSTERSIZE)*(rTilesize2))-(m->size.z*rTilesize2)/2-(tilesize<<6)*SCALEFACTOR};
 					r=ClosestPointOnLine(p->position, lineOfSight, 10, &dist, center);
 					if(sqDistance(r, center)<=sqrTilesize && (dist<mindist || !got))
 					{
-						// NOGBA("col : %d %d %d",i+m->size.x/2,j+m->size.y/2,k+m->size.z/2);
 						mindist=dist;
 						testCursorI=i+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.x*CLUSTERSIZE;
 						testCursorJ=j+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.y*CLUSTERSIZE;
 						testCursorK=k+m->size.z/2+m->offset.z*CLUSTERSIZE;
 						testCursor=testCursorI+testCursorJ*m->size.x+testCursorK*m->size.x*m->size.y;
-						// drawTestBlock(m, testCursorI, testCursorJ, testCursorK);
 						got=true;
 					}
 				}
@@ -263,24 +274,19 @@ void updatePlayer(player_struct* p)
 	iprintf("\nplayer : %d %d %d  ",pi,pj,pk);
 	iprintf("\ncursor2 : %d %d %d %d  ",testCursorI,testCursorJ,testCursorK,testCursor);
 	#endif
+	cursorValid=got;
 	if(got)
 	{
-		// vect3D testCluster=getCluster(m, testCursorI, testCursorJ, testCursorK);
-		// q=clusterCheck(m, &m->cluster[qgetCluster(m,testCluster.x,testCluster.y,testCluster.z)], testLine, testCursorI, testCursorJ, testCursorK);
 		cursorDir=clusterCheck(m, testLine, testCursorI, testCursorJ, testCursorK);
 		#ifdef DEBUGMODE
 		iprintf("\ncursor : %d   ",cursorDir);
 		#endif
 		if(cursorDir<0)cursorDir=0;
 	}
-		int time;
-		PROF_END(time);
-	// printf("\nTEST : %d, %d   ", q!=NULL, time);
 	
 	if(cull)if(!m->transitioning[2] && !m->transitioning[3] && !m->transitioning[1] && !m->transitioning[0])
 	{
 		bool managed=false;
-		// if(((m->offset.y && m->offset.y < m->clusterSize.y-SUPERCLUSTERSIZE-1) && abs(p->position.x)>abs(p->position.y)) || (!m->offset.y || m->offset.y >= m->clusterSize.y-SUPERCLUSTERSIZE-1))
 		if((!m->offset.y || m->offset.y>=m->clusterSize.y-SUPERCLUSTERSIZE-1) || (abs(p->position.x)>abs(p->position.y)))
 		{
 			if(p->position.x>bsize*SCALEFACTOR && m->offset.x < m->clusterSize.x-SUPERCLUSTERSIZE) //streaming
@@ -295,7 +301,6 @@ void updatePlayer(player_struct* p)
 				managed=true;
 			}
 		}
-		// if(!managed && (((m->offset.x && m->offset.x < m->clusterSize.x-SUPERCLUSTERSIZE-1) && abs(p->position.x)<=abs(p->position.y)) || (!m->offset.y || m->offset.x >= m->clusterSize.x-SUPERCLUSTERSIZE-1)))
 		if(!managed && ((!m->offset.x || m->offset.x>=m->clusterSize.x-SUPERCLUSTERSIZE-1) || (abs(p->position.x)<=abs(p->position.y))))
 		{
 			if(p->position.y>bsize*SCALEFACTOR && m->offset.y < m->clusterSize.y-SUPERCLUSTERSIZE) //streaming
@@ -310,10 +315,9 @@ void updatePlayer(player_struct* p)
 		}
 	}
 	
-	// if(!noclip)
 	{
-		// iprintf("\ngravity div : %d   ",gravityDiv);
-		if(!noclip)p->vector.z-=GRAVITY*gravityDiv;
+		if(survivalEnabled() || noclip)p->flying=false;   // only creative flies
+		if(!noclip && !p->flying)p->vector.z-=GRAVITY*gravityDiv;
 		PROF_START();
 		u8 t=getPointBlock(m, p->position.x, p->position.y, p->position.z);
 		vect3D po=getPointBlockPos(m, p->position.x, p->position.y, p->position.z);
@@ -321,7 +325,8 @@ void updatePlayer(player_struct* p)
 		p->clusterCoord.x-=m->offset.x;
 		p->clusterCoord.y-=m->offset.y;
 		p->inCave=0;
-		surface2(m, po.x, po.y, po.z, &p->inCave);
+		if(po.x>=0 && po.y>=0 && po.z>=0 && po.x<m->size.x && po.y<m->size.y && po.z<m->size.z)surface2(m, po.x, po.y, po.z, &p->inCave);
+		else if(po.z>=m->size.z)p->inCave=1<<7;   // above the world: open sky; below it: under the world
 		u8 t_2=getPointBlock(m, p->position.x, p->position.y, p->position.z-4500);
 		if(t>=WATERTYPE || t_2>=WATERTYPE)
 		{
@@ -347,25 +352,68 @@ void updatePlayer(player_struct* p)
 			gravityDiv=1;
 		}
 		if(p->inWater!=2 && !fogMode && p->inCave)setFog(1);
-		// vect3D testPos=p->position;
-		// testPos.z-=4000;
-		// testPoint(&map, testPos, &p->vector); // works but simple
-		vect3D testPos=(vect3D){p->position.x,p->position.y,p->position.z-6000};
+		moveModifiers(m,p);
+		vect3D want=p->vector;
+		vect3D testPos=(vect3D){p->position.x,p->position.y,p->position.z-FEET};
 		testPlane(&map, testPos, &p->vector);
 		testPos=(vect3D){p->position.x,p->position.y,p->position.z-2000};
 		testPlane(&map, testPos, &p->vector);
 		testPos=(vect3D){p->position.x,p->position.y,p->position.z+2000};
 		testPlane(&map, testPos, &p->vector);
-		// int time;
+		// touching the ground ends a flight; running into a wall ends a sprint
+		if(p->flying && want.z<0 && p->vector.z>want.z){p->flying=false;p->vector.z=0;}
+		if(p->sprinting && (p->vector.x!=want.x || p->vector.y!=want.y))p->sprinting=false;
+		if(p->flying){p->flyVX=p->vector.x;p->flyVY=p->vector.y;}
+		int time;
 		PROF_END(time);
 		#ifdef DEBUGMODE
 		iprintf("\ncollisions : %d    ",time);
 		#endif
 		p->position.x+=p->vector.x;p->position.y+=p->vector.y;p->position.z+=p->vector.z;
+		{
+			// world border (noclip included): outside the map the game has no blocks
+			// to collide with or draw, and the culling would index past its tables
+			int32 baseX=(SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.x*CLUSTERSIZE)*rTilesize2;
+			int32 baseY=(SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.y*CLUSTERSIZE)*rTilesize2;
+			int32 minX=-baseX, maxX=(m->size.x-1)*rTilesize2-baseX;
+			int32 minY=-baseY, maxY=(m->size.y-1)*rTilesize2-baseY;
+			int32 deathZ=(-VOID_DEATH_DEPTH-m->size.z/2)*rTilesize2;
+			int32 minZ=deathZ-VOID_DEATH_DEPTH*rTilesize2;     // a floor far below the death zone, just in case
+			if(p->position.x<minX){p->position.x=minX;p->vector.x=0;}
+			else if(p->position.x>maxX){p->position.x=maxX;p->vector.x=0;}
+			if(p->position.y<minY){p->position.y=minY;p->vector.y=0;}
+			else if(p->position.y>maxY){p->position.y=maxY;p->vector.y=0;}
+			if(p->position.z<minZ){p->position.z=minZ;p->vector.z=0;}
+			// creative players have no health: the death zone brings them back to the surface
+			if(!survivalEnabled() && p->position.z<deathZ)
+			{
+				int gi=p->position.x/rTilesize2+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.x*CLUSTERSIZE;
+				int gj=p->position.y/rTilesize2+SUPERCLUSTERSIZE*CLUSTERSIZE/2+m->offset.y*CLUSTERSIZE;
+				if(gi<0)gi=0; else if(gi>=m->size.x)gi=m->size.x-1;
+				if(gj<0)gj=0; else if(gj>=m->size.y)gj=m->size.y-1;
+				p->position.z=(getHighest(m,gi,gj)+3-m->size.z/2)*rTilesize2;
+				p->vector=(vect3D){0,0,0};
+			}
+		}
 		p->vector.x=0;
 		p->vector.y=0;
 		if(noclip || p->onLadder)p->vector.z=0;
-	}//else {p->position.x+=p->vector.x;p->position.y+=p->vector.y;p->position.z+=p->vector.z;p->vector=(vect3D){0,0,0};}
+	}
+	survivalUpdate(p);
+	furnacesUpdate(&map);
+	plantsUpdate(&map);
+	{
+		// the view widens when sprinting (x1.15) and flying (x1.1), as Minecraft eases it
+		float target=70;
+		if(p->sprinting)target*=1.15f;
+		if(p->flying)target*=1.1f;
+		fov+=(target-fov)*0.4f;
+		{
+			int32 eye=(p->sneaking && !p->flying)?SNEAK_EYE:0;
+			eyeDrop+=(eye-eyeDrop)/2;
+			if(abs(eye-eyeDrop)<2)eyeDrop=eye;
+		}
+	}
 }
 
 void playerCamera(player_struct* p, bool environment)
@@ -373,7 +421,7 @@ void playerCamera(player_struct* p, bool environment)
 	glRotateXi(p->angleX);
 	glRotateZi(p->angleZ);
 	if(p->angleZ<0)p->angleZ+=32768;
-	glTranslatef32(0,0,-p->position.z+(cosLerp(walkAngle)>>4));
+	glTranslatef32(0,0,-p->position.z+(cosLerp(walkAngle)>>4)+eyeDrop);
 	if(!testBuffer && environment)
 	{
 		drawStars();
@@ -397,29 +445,9 @@ u8 getPointBlock(map_struct* m, int32 i, int32 j, int32 k)
 	i=(i+(tilesize<<6)*SCALEFACTOR+(SUPERCLUSTERSIZE*CLUSTERSIZE*rTilesize2)/2)/(rTilesize2)+m->offset.x*CLUSTERSIZE;
 	j=(j+(tilesize<<6)*SCALEFACTOR+(SUPERCLUSTERSIZE*CLUSTERSIZE*rTilesize2)/2)/(rTilesize2)+m->offset.y*CLUSTERSIZE;
 	k=(k+(tilesize<<6)*SCALEFACTOR+(m->size.z*rTilesize2)/2)/(rTilesize2)+m->offset.z*CLUSTERSIZE;
-	// NOGBA("pos : %d",k);
-	// iprintf("\nblock %d %d %d (%d)  ",i,j,k,(*getBlockP(m,i,j,k)));
-	if(i<0 || j<0 || k<0 || i>=m->size.x || j>=m->size.y || k>=m->size.z)return 1;
+	if(i<0 || j<0 || i>=m->size.x || j>=m->size.y || k>=m->size.z)return 1;
+	if(k<0)return 0;               // the void under the bedrock
 	return (*getBlockP(m,i,j,k));
-	// i-=rTilesize;
-	// j-=rTilesize;
-	// k-=rTilesize;
-	// return *getBlockP(m,(i-i%rTilesize2+(m->size.x*rTilesize2)/2)/rTilesize2,(j-j%rTilesize2+(m->size.y*rTilesize2)/2)/rTilesize2,(k-k%rTilesize2+(m->size.z*rTilesize2)/2)/rTilesize2);
-}
-
-void testPoint(map_struct* m, vect3D point, vect3D* vector)
-{	
-	if(!vector->x && !vector->y && !vector->z)return;
-	if(vector->x>rTilesize2)vector->x=rTilesize2-1;
-	else if(vector->x<-rTilesize2)vector->x=-rTilesize2+1;
-	if(vector->y>rTilesize2)vector->y=rTilesize2-1;
-	else if(vector->y<-rTilesize2)vector->y=-rTilesize2+1;
-	if(vector->z>rTilesize2)vector->z=rTilesize2-1;
-	else if(vector->z<-rTilesize2)vector->z=-rTilesize2+1;
-	
-	if(solid(getPointBlock(m, point.x, point.y, point.z+vector->z)))vector->z=(vector->z<0)?(-(((point.z-rTilesize+map.size.z*rTilesize2))%rTilesize2)+1):((rTilesize2-(((point.z-rTilesize+map.size.z*rTilesize2))%rTilesize2))-1);
-	if(solid(getPointBlock(m, point.x, point.y+vector->y, point.z+vector->z)))vector->y=(vector->y<0)?(-(((point.y-rTilesize+map.size.y*rTilesize2))%rTilesize2)+1):((rTilesize2-(((point.y-rTilesize+map.size.y*rTilesize2))%rTilesize2))-1);
-	if(solid(getPointBlock(m, point.x+vector->x, point.y+vector->y, point.z+vector->z)))vector->x=(vector->x<0)?(-(((point.x-rTilesize+map.size.x*rTilesize2))%rTilesize2)+1):((rTilesize2-(((point.x-rTilesize+map.size.x*rTilesize2))%rTilesize2))-1);
 }
 
 void testPlane(map_struct* m, vect3D point, vect3D* vector)
@@ -539,7 +567,6 @@ bool IntersectedPlane(vect3D* vPoly, vect3D* vLine, vect3D* vNormal, int32* orig
 	*vNormal = Normal(vPoly);
 	
 	*originDistance = PlaneDistance(*vNormal, vPoly[0]);
-	// NOGBA("origindist : %d",*originDistance);
 
 	distance1 = (mulf32(vNormal->x, vLine[0].x)  +					// Ax +
 		         mulf32(vNormal->y, vLine[0].y)  +					// Bx +
@@ -576,13 +603,11 @@ int32 AngleBetweenVectors(vect3D Vector1, vect3D Vector2)
 	int32 vectorsMagnitude = mulf32(Magnitude(Vector1), Magnitude(Vector2));
 
 	// Get the arc cosine of the (dotProduct / vectorsMagnitude) which is the angle in RADIANS.
-	// (IE.   PI/2 radians = 90 degrees      PI radians = 180 degrees    2*PI radians = 360 degrees)
 	// To convert radians to degress use this equation:   radians * (PI / 180)
 	// TO convert degrees to radians use this equation:   degrees * (180 / PI)
 	int32 angle = /*angleToDegrees*/(acosLerp(divf32(dotProduct, vectorsMagnitude)));
 
 	/*// Here we make sure that the angle is not a -1.#IND0000000 number, which means indefinate.
-	// acos() thinks it's funny when it returns -1.#IND0000000.  If we don't do this check,
 	// our collision results will sometimes say we are colliding when we aren't.  I found this
 	// out the hard way after MANY hours and already wrong written tutorials :)  Usually
 	// this value is found when the dot product and the maginitude are the same value.
@@ -664,7 +689,6 @@ vect3D IntersectionPoint(vect3D vNormal, vect3D* vLine, int32 distance, int32 *r
 
 bool InsidePolygon(vect3D vIntersection, vect3D* Poly, long verticeCount)
 {
-	// const double MATCH_FACTOR = 0.9999;		// Used to cover up the error in floating point
 	int32 Angle=0;						// Initialize the angle
 	vect3D vA, vB;						// Create temp vectors
 	
@@ -702,7 +726,6 @@ bool IntersectedPolygon(vect3D* vPoly, vect3D* vLine, int verticeCount, int32* o
 									 // Reference   // Reference
 	if(!IntersectedPlane(vPoly, vLine,   &vNormal,   originDistance))
 		return false;
-	// return true;
 
 	// Now that we have our normal and distance passed back from IntersectedPlane(), 
 	// we can use it to calculate the intersection point.  The intersection point
@@ -714,7 +737,6 @@ bool IntersectedPolygon(vect3D* vPoly, vect3D* vLine, int verticeCount, int32* o
 
 	// Now that we have the intersection point, we need to test if it's inside the polygon.
 	// To do this, we pass in :
-	// (our intersection point, the polygon, and the number of vertices our polygon has)
 
 	if(InsidePolygon(vIntersection, vPoly, verticeCount))return true;
 
@@ -760,7 +782,6 @@ vect3D ClosestPointOnLine(vect3D vA, vect3D vD, int length, int32* dist, vect3D 
 	// of the 2 vectors), we just use our vector that is going the direction of the
 	// line segment, "vVector2", and multiply it by the distance scalar "t".  This will
 	// create a vector going in the direction of the line segment, with a distance
-	// (or magnitude) of the projected vector, "vVector1", is from from "vA".  We then add
 	// this vector to "vA", which gives us the point on the line that is closest to our
 	// point out in space, vPoint!  
 	//

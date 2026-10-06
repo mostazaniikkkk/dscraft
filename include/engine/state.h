@@ -15,12 +15,11 @@ u8 state_id;
 
 DS_state *CurrentState, *NextState;
 
-DS_state Game_State, Bilan_State, Menu_State;
+DS_state Game_State, Menu_State;
 
 void glReInit(void);
 void DS_ApplyState(void);
 void DS_InitHardware(void);
-void DS_SetState(DS_state* state);
 
 static inline void DS_ChangeState(DS_state* state)
 {

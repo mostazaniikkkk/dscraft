@@ -39,7 +39,6 @@ void DS_freeState(DS_state* state)
 			{
 				free(DS_malloc_list[i]);
 				DS_malloc_list[i]=NULL;
-				//NOGBA("%d, %p\n",i,GetStackPointer());
 			}
 		}
 		DS_Debug("%d,",state->mc_id);

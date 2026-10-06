@@ -1,8 +1,6 @@
 #ifndef __GENERAL9__
 #define __GENERAL9__
 
-#define GAMEVERSION "1.0"
-
 #define v1 NORMAL_PACK( 0, 0,0);
 #define v2 NORMAL_PACK( 0,64,0);
 #define v3 NORMAL_PACK(64,64,0);
@@ -25,11 +23,7 @@
 #include <malloc.h>
 #include <unistd.h>
 
-#include "creeper_bin.h"
-
 #include "fat/fatfile.h"
-
-#include "common/math.h"
 
 #include "game/ex_game.h"
 #include "menu/ex_menu.h"
@@ -39,8 +33,8 @@
 #include "debug/stats.h"
 #include "engine/state.h"
 #include "engine/debug.h"
-#include "engine/error.h"
 #include "engine/files.h"
+#include "engine/screenshot.h"
 #include "engine/memory.h"
 
 #endif

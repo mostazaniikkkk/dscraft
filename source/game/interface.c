@@ -1,4 +1,6 @@
 #include "game/game_main.h"
+#include <maxmod9.h>
+#include "soundbank.h"
 
 #define IBARY 170
 #define IBARD 20
@@ -34,16 +36,7 @@
 #define INVENTORYBY 168
 #define INVENTORYBOX 18
 
-#define TOGGLECOL (256-10)
-#define SAVECOL (256-11)
-#define INVCOL (256-12)
-
 u8 itemBar[]={1,3,4,13,6,7,8,11,12}; //water test
-// u8 itemBar[]={1,3,4,13,6,7,40,11,12}; //ladder test
-// u8 itemBar[]={1,3,4,13,6,7,DOORTYPE,11,12}; //door test
-// u8 inventoryItem[]={14,15,16,17,18,19,20,21,22,
-					// 23,24,25,26,27,28,29,30,31,
-					// 32,33,34,35,36,37,38,39,2};
 u8 inventoryItem[]={14,15,16,17,18,19,20,21,22,
 					23,24,25,26,27,28,29,30,31,
 					32,33,34,35,36,40,DOORTYPE,39,2};
@@ -52,34 +45,6 @@ u8 inventoryItems=27;
 u8 cursorSprite, buttonSprite;
 
 //from libnds (heavily modified)
-void imageTileDataDest(sImage* img, u32* destination)
-{
-	int ix, iy, tx, ty;
-	int th, tw;
-	int i = 0;
-
-	th = img->height >> 3;
-	tw = img->width >> 3;
-
-	int x8, y8, x4, y4;	
-	for(x4=0;x4<4;x4++)
-	{
-		for(y4=0;y4<4;y4++)
-		{
-			for(x8=0;x8<8;x8++)
-			{
-				for(y8=0;y8<8;y8++)
-				{
-					ty=y8+8*y4;tx=x8+8*x4;i=0;
-						for(iy = 0; iy < 8; iy++)
-							for(ix = 0; ix < 2; ix++)
-								destination[(i++)+(x8+(y8+(x4+4*y4)*8)*8)*16] = img->image.data32[ix + tx * 2 + (iy + ty * 8) * tw * 2 ]; 
-				}
-			}
-		}
-	}
-}
-
 void loadImageDirect(char* filename)
 {
 	FILE* f=DS_OpenFile(filename, "", false, true);
@@ -118,9 +83,6 @@ void setItemPosition(u8 id, u8 x, u8 y)
 	items[id].position.y=y;
 	oamSub.oamMemory[items[id].id].attribute[0] = ATTR0_BMP | ATTR0_SQUARE | (items[id].position.y);
 	oamSub.oamMemory[items[id].id].attribute[1] = ATTR1_SIZE_16 | (items[id].position.x);
-	// oamSub.oamMemory[items[id].id].attribute[2] = ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | (8*2*(24+items[id].type*2));
-	// oamSub.oamMemory[items[id].id].attribute[2] = ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | (8*2*(24+((items[id].type-(items[id].type%8))/8)*2)+2*(items[id].type%8));
-	// oamSub.oamMemory[items[id].id].attribute[2] = ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | (8*2*(32+((items[id].type-(items[id].type%8))/8)*2)+2*(items[id].type%8));
 	oamSub.oamMemory[items[id].id].attribute[2] = ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | (8*2*(36+((items[id].type-(items[id].type%8))/8)*2)+2*(items[id].type%8));
 }
 
@@ -169,38 +131,10 @@ void initInventory(void)
 
 void loadInterface(char* filename, u8 prio)
 {
-	int i,x,y;
+	int x,y;
 	
-	// u8* buffer=DS_OpenFile(filename, "", true, true);
-	
-	// sImage pcx;
-	// FILE* f=DS_OpenFile(filename, "", false, true);
-	// directLoadPCX(f, &pcx);
-	// fclose(f);
-	// loadPCX((u8*)buffer, &pcx);
-	// free(buffer);
-    // imageTileDataDest(&pcx, (u32*)SPRITE_GFX_SUB);
 	loadImageDirect(filename);
 	
-	// vramSetBankI(VRAM_I_LCD);
-	// for(i=0;i<256;i++)VRAM_I_EXT_SPR_PALETTE[0][i]  = pcx.palette[i];
-	// vramSetBankI(VRAM_I_SUB_SPRITE_EXT_PALETTE);
-	
-	// int x4, y4;
-	// for(x4=0;x4<4;x4++)
-	// {
-		// for(y4=0;y4<4;y4++)
-		// {
-			// for(x=0;x<8;x++)
-			// {
-				// for(y=0;y<8;y++)
-				// {
-					// for(i=0;i<32;i++)SPRITE_GFX_SUB[i+x*32+(y+(x4+4*y4)*8)*32*8] = pcx.image.data16[i+(x+x4*8)*32+(y+8*y4)*32*32];
-				// }
-			// }
-		// }
-	// }
-	// imageDestroy(&pcx);
 	int id=0;
 	for(y = 0; y < 3; y++)
 	{
@@ -216,7 +150,6 @@ void loadInterface(char* filename, u8 prio)
 
 void initInterface(void)
 {
-	// oamInit(&oamSub, SpriteMapping_Bmp_2D_256, false);
 	oamInit(&oamSub, SpriteMapping_1D_256, true);
  
 	int x, y, i;
@@ -301,6 +234,10 @@ void initInterface(void)
 		cursorSprite=id;
 		id++;
 	}
+	survivalInitSprites(id);
+	id+=SURVIVAL_HEARTS;
+	inventoryInitChestSprites(id);
+	id+=CHEST_SPRITES;
 	usedSprites=id;
 	initItems();
 	initSlots();
@@ -345,87 +282,18 @@ void initInterface(void)
 	invOpen=false;
 }
 
-s8 selectedItem=-1;
-vect3D offset;
-
 bool updateInterface(void)
 {
-	int i, j;
+	int i;
 
 	oamRotateScale(&oamSub, 0, -Player.angleZ, intToFixed(1, 8), intToFixed(1, 8));
 	oamRotateScale(&oamSub, 1, sunX+8192, intToFixed(1, 8), intToFixed(1, 8));
 	oamUpdate(&oamSub);
 
-	// vramSetBankI(VRAM_I_LCD);
-		
-	for(i=0;i<MAXITEMS;i++)
-	{
-		if(items[i].used)
-		{
-			if(slots[items[i].slot].used)
-			{
-				if(!((keysUp() & KEY_TOUCH) && selectedItem==i))setItemPosition(i, slots[items[i].slot].position.x, slots[items[i].slot].position.y);
-			}else setItemPosition(i, 255, 192);
-			if(items[i].slot<9)
-			{
-				// if(cursorBlock==items[i].type)SPRITE_PALETTE_SUB[255-i]=RGB15(31,31,31);
-				// else SPRITE_PALETTE_SUB[255-i]=RGB15(15,15,15);	
-				// if(cursorBlock==items[i].type)VRAM_I_EXT_SPR_PALETTE[0][255-items[i].slot]=RGB15(31,31,31);
-				// else VRAM_I_EXT_SPR_PALETTE[0][255-items[i].slot]=RGB15(15,15,15);
-				if(cursorBlock==items[i].type)
-				{
-					tempCursor=items[i].slot;
-					oamSub.oamMemory[cursorSprite].attribute[0] = ATTR0_COLOR_256 | ATTR0_SQUARE | (items[i].position.y-2);
-					oamSub.oamMemory[cursorSprite].attribute[1] = ATTR1_SIZE_32 | (items[i].position.x-2);
-					oamSub.oamMemory[cursorSprite].attribute[2] = ATTR2_PRIORITY(0) | ATTR2_PALETTE(2) | (8 * 2 * (0+4*4)+5);
-				}
-			}
-			if(keysDown() & KEY_TOUCH)
-			{
-				if(thisXY.px>=items[i].position.x && thisXY.py>=items[i].position.y && thisXY.px<items[i].position.x+16 && thisXY.py<items[i].position.y+16)
-				{
-					if(items[i].slot<9)cursorBlock=items[i].type;
-					if(invOpen)
-					{
-						selectedItem=i;
-						offset.x=items[i].position.x-thisXY.px;
-						offset.y=items[i].position.y-thisXY.py;
-					}
-				}
-			}
-			if(invOpen)
-			{
-				if(keysHeld() & KEY_TOUCH)
-				{
-					if(selectedItem==i)
-					{
-						setItemPosition(i,thisXY.px+offset.x,thisXY.py+offset.y);
-					}
-				}
-				if(keysUp() & KEY_TOUCH)
-				{
-					if(selectedItem==i)
-					{
-						for(j=0;j<MAXSLOTS;j++)
-						{
-							if(slots[j].used && items[i].position.x+8>slots[j].position.x && items[i].position.y+8>slots[j].position.y 
-							&& items[i].position.x+8<=slots[j].position.x+16 && items[i].position.y+8<=slots[j].position.y+16)
-							{
-								if(slots[j].id>=0)items[slots[j].id].slot=items[i].slot;
-								slots[items[i].slot].id=slots[j].id;
-								items[i].slot=j;
-								slots[j].id=i;
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+	// item bar and inventory: survival.c/inventory.c or creative.c draw them
+	if(!survivalEnabled())creativeUpdateUI(invOpen);
 	if(!invOpen && (keysDown() & KEY_TOUCH))overButtons=thisXY.py<TOGGLEY+TOGGLESY;
 	else if(invOpen)overButtons=true;
-	if(!(keysHeld() & KEY_TOUCH))selectedItem=-1;
 	if((keysHeld() & KEY_TOUCH) && thisXY.px>=CLOCKX && thisXY.py>=CLOCKY && thisXY.px<CLOCKX+32 && thisXY.py<CLOCKY+16)
 	{
 		sunX+=600;
@@ -436,17 +304,15 @@ bool updateInterface(void)
 		if((keysUp() & KEY_TOUCH) && lastXY.px>=TOGGLEX && lastXY.py>=TOGGLEY && lastXY.px<TOGGLEX+TOGGLESX && lastXY.py<TOGGLEY+TOGGLESY)
 		{
 			action^=1;
-		}else if(!action){oamSub.oamMemory[buttonSprite+2*0].attribute[0] = ATTR0_DISABLED;oamSub.oamMemory[buttonSprite+2*0+1].attribute[0] = ATTR0_DISABLED;}//else VRAM_I_EXT_SPR_PALETTE[0][TOGGLECOL]=RGB15(31,31,31);
+		}else if(!action){oamSub.oamMemory[buttonSprite+2*0].attribute[0] = ATTR0_DISABLED;oamSub.oamMemory[buttonSprite+2*0+1].attribute[0] = ATTR0_DISABLED;}
 		if(action || ((keysHeld() & KEY_TOUCH) && thisXY.px>=TOGGLEX && thisXY.py>=TOGGLEY && thisXY.px<TOGGLEX+TOGGLESX && thisXY.py<TOGGLEY+TOGGLESY))
 		{
-			// VRAM_I_EXT_SPR_PALETTE[0][TOGGLECOL]=RGB15(15,15,15);
 			oamSub.oamMemory[buttonSprite+2*0].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 			oamSub.oamMemory[buttonSprite+2*0+1].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 		}
 		
 		if((keysHeld() & KEY_TOUCH) && thisXY.px>=INVX && thisXY.py>=INVY && thisXY.px<INVX+INVSX && thisXY.py<INVY+INVSY)
 		{
-			// VRAM_I_EXT_SPR_PALETTE[0][INVCOL]=RGB15(15,15,15);
 			oamSub.oamMemory[buttonSprite+2*1].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 			oamSub.oamMemory[buttonSprite+2*1+1].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 		}else if((keysUp() & KEY_TOUCH) && lastXY.px>=INVX && lastXY.py>=INVY && lastXY.px<INVX+INVSX && lastXY.py<INVY+INVSY)
@@ -478,11 +344,10 @@ bool updateInterface(void)
 				}
 			}
 			invOpen^=1;
-		}else{oamSub.oamMemory[buttonSprite+2*1].attribute[0] = ATTR0_DISABLED;oamSub.oamMemory[buttonSprite+2*1+1].attribute[0] = ATTR0_DISABLED;}//else VRAM_I_EXT_SPR_PALETTE[0][INVCOL]=RGB15(31,31,31);
+		}else{oamSub.oamMemory[buttonSprite+2*1].attribute[0] = ATTR0_DISABLED;oamSub.oamMemory[buttonSprite+2*1+1].attribute[0] = ATTR0_DISABLED;}
 		
 		if((keysHeld() & KEY_TOUCH) && thisXY.px>=SAVEX && thisXY.py>=SAVEY && thisXY.px<SAVEX+SAVESX && thisXY.py<SAVEY+SAVESY)
 		{
-			// VRAM_I_EXT_SPR_PALETTE[0][SAVECOL]=RGB15(15,15,15);
 			oamSub.oamMemory[buttonSprite+2*2].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 			oamSub.oamMemory[buttonSprite+2*2+1].attribute[0] = ATTR0_COLOR_256 | ATTR0_WIDE | (0);
 		}else if((keysUp() & KEY_TOUCH) && lastXY.px>=SAVEX && lastXY.py>=SAVEY && lastXY.px<SAVEX+SAVESX && lastXY.py<SAVEY+SAVESY)
@@ -490,8 +355,143 @@ bool updateInterface(void)
 			globalSaveMap(&map);
 		}else{oamSub.oamMemory[buttonSprite+2*2].attribute[0] = ATTR0_DISABLED;oamSub.oamMemory[buttonSprite+2*2+1].attribute[0] = ATTR0_DISABLED;}
 	}
-	// vramSetBankI(VRAM_I_SUB_SPRITE_EXT_PALETTE);
+	survivalUpdateHUD(invOpen);
 	return !invOpen;
+}
+
+// Opened by using a crafting table: the inventory screen with a 3x3 grid.
+void interfaceOpenCraftingTable(void)
+{
+	int i;
+	if(invOpen)return;
+	loadInterface("crafting.bin",1);
+	for(i=0;i<9;i++)
+	{
+		slots[i].position.x=INVENTORYBX+i*INVENTORYBOX;
+		slots[i].position.y=INVENTORYBY;
+	}
+	for(i=9;i<9+9*3;i++)slots[i].used=true;
+	invOpen=true;
+	overButtons=true;
+	inventoryOpen(true);
+}
+
+// Opened by using a chest: its slots (two pages for a double chest) above the inventory.
+void interfaceOpenChest(chest_struct* a, chest_struct* b)
+{
+	int i;
+	if(invOpen)return;
+	loadInterface("chest.bin",1);
+	for(i=0;i<9;i++)
+	{
+		slots[i].position.x=INVENTORYBX+i*INVENTORYBOX;
+		slots[i].position.y=INVENTORYBY;
+	}
+	for(i=9;i<9+9*3;i++)slots[i].used=true;
+	invOpen=true;
+	overButtons=true;
+	inventoryOpenChest(a,b);
+}
+
+// Opened by using a furnace: input, fuel and output above the inventory.
+void interfaceOpenFurnace(furnace_struct* f)
+{
+	int i;
+	if(invOpen)return;
+	loadInterface("furnace.bin",1);
+	for(i=0;i<9;i++)
+	{
+		slots[i].position.x=INVENTORYBX+i*INVENTORYBOX;
+		slots[i].position.y=INVENTORYBY;
+	}
+	for(i=9;i<9+9*3;i++)slots[i].used=true;
+	invOpen=true;
+	overButtons=true;
+	inventoryOpenFurnace(f);
+}
+
+/* ---------------------------------------------------------------------------
+ * Game menu (START), as Minecraft's: back to the game, a screenshot, or save
+ * and quit to the title screen. The game stands still while it is open.
+ * ------------------------------------------------------------------------- */
+
+#define PAUSE_BX 59                // buttons drawn in pause.bin (tools/make_pause_bin.py)
+#define PAUSE_BW 152
+#define PAUSE_BH 20
+static const u8 pauseButtonY[3]={112,136,160};
+static u16 pauseOam[128][3];
+static touchPosition pauseTouch;
+
+// an open inventory, crafting table, chest or furnace closes first, as in Minecraft
+static void closeWindow(void)
+{
+	int i;
+	loadInterface("interface.bin",1);
+	for(i=0;i<9;i++)
+	{
+		slots[i].position.x=IBARX+i*IBARD;
+		slots[i].position.y=IBARY;
+	}
+	for(i=9;i<9+9*3;i++)slots[i].used=false;
+	invOpen=false;
+	if(survivalEnabled())inventoryClose();
+}
+
+void gamePause(bool on)
+{
+	int i;
+	if(on==gamePaused)return;
+	if(on)
+	{
+		if(invOpen)closeWindow();
+		for(i=0;i<128;i++)
+		{
+			pauseOam[i][0]=oamSub.oamMemory[i].attribute[0];
+			pauseOam[i][1]=oamSub.oamMemory[i].attribute[1];
+			pauseOam[i][2]=oamSub.oamMemory[i].attribute[2];
+		}
+		// the screen's background, the compass and the clock stay
+		for(i=buttonSprite;i<buttonSprite+8;i++)oamSub.oamMemory[i].attribute[0]=ATTR0_DISABLED;
+		for(i=cursorSprite;i<128;i++)oamSub.oamMemory[i].attribute[0]=ATTR0_DISABLED;
+		loadInterface("pause.bin",1);
+	}else{
+		loadInterface("interface.bin",1);
+		for(i=12;i<128;i++)
+		{
+			oamSub.oamMemory[i].attribute[0]=pauseOam[i][0];
+			oamSub.oamMemory[i].attribute[1]=pauseOam[i][1];
+			oamSub.oamMemory[i].attribute[2]=pauseOam[i][2];
+		}
+	}
+	gamePaused=on;
+	oamUpdate(&oamSub);
+}
+
+void pauseUpdate(void)
+{
+	int b;
+	scanKeys();
+	if(keysDown() & KEY_START){gamePause(false);return;}
+	if(keysHeld() & KEY_TOUCH){touchRead(&pauseTouch);return;}
+	if(!(keysUp() & KEY_TOUCH))return;
+	// a button acts when the stylus is lifted on it
+	for(b=0;b<3;b++)
+		if(pauseTouch.px>=PAUSE_BX && pauseTouch.px<PAUSE_BX+PAUSE_BW && pauseTouch.py>=pauseButtonY[b] && pauseTouch.py<pauseButtonY[b]+PAUSE_BH)break;
+	switch(b)
+	{
+		case 0:
+			gamePause(false);
+			break;
+		case 1:
+			mmEffect(SFX_ADD);
+			takeScreenshot();
+			break;
+		case 2:
+			gamePause(false);
+			globalSaveMap(&map);
+			DS_ChangeState(&Menu_State);
+			break;
+	}
 }
 
 void startSave(void)

@@ -5,6 +5,11 @@
 #include "soundbank.h"
 #include "soundbank_bin.h"
 
+// Jump speed: with GRAVITY 70 per tick this reaches 1.26 blocks, Minecraft's jump
+// height (1.25). The original 850 only reached 1.16, too little to jump and
+// place a block under yourself.
+#define JUMP_SPEED 885
+
 vect3D tempAngle;
 u8 oldwAngle;
 u8 walkSfx;
@@ -15,14 +20,26 @@ void initControls(void)
 	action=0;
 }
 
-void placeBlock(void)
+// Returns true when a block was actually placed (opening a door is not placing).
+bool placeBlock(void)
 {
-	mmEffect(SFX_ADD);
 	map_struct* m=&map;
 	int i=testCursorI, j=testCursorJ, k=testCursorK;
+	// the cursor keeps the last block it found: act only while it points at one
+	if(!cursorValid)return false;
 	u8 ot=*getBlockP(m,i,j,k);
-	if(ot>=DOORTYPE && ot<DOORTYPE+8)
+	// sneaking with something in hand places against the block instead of using it
+	bool activate=!Player.sneaking || !cursorBlock;
+	if(activate && survivalEnabled() && ot==ITEM_CRAFTING_TABLE)
 	{
+		interfaceOpenCraftingTable();
+		return false;
+	}
+	if(activate && chestOpen(m,i,j,k))return false;
+	if(activate && furnaceOpen(m,i,j,k))return false;
+	if(activate && ot>=DOORTYPE && ot<DOORTYPE+8)
+	{
+		mmEffect(SFX_ADD);
 		if((ot-DOORTYPE)%2)k++;
 		ot=(ot-DOORTYPE-((ot-DOORTYPE)%2))/2;
 		removeBlock(m, i, j, k, false);
@@ -63,9 +80,10 @@ void placeBlock(void)
 		surface(m, i, j, k-1, &light);
 		getLight(m, i, j, k-1, &light, dir+8);
 		addQuad(ql2, m, dir+8, light, bid, m->superCluster[clusterCoord2.x-m->offset.x][clusterCoord2.y-m->offset.y]->data, i, j, k-1);
-		return;
+		return false;
 	}else if(ot>=DOORTYPE+8 && ot<DOORTYPE+16)
 	{
+		mmEffect(SFX_ADD);
 		if((ot-DOORTYPE)%2)k++;
 		ot=(ot-DOORTYPE-((ot-DOORTYPE)%2)-8)/2;
 		removeBlock(m, i, j, k, false);
@@ -106,8 +124,16 @@ void placeBlock(void)
 		surface(m, i, j, k-1, &light);
 		getLight(m, i, j, k-1, &light, dir+8);
 		addQuad(ql2, m, dir+8, light, bid, m->superCluster[clusterCoord2.x-m->offset.x][clusterCoord2.y-m->offset.y]->data, i, j, k-1);
-		return;
+		return false;
 	}
+	// the hoe and planting act on the block pointed at; a carrot not planted is eaten
+	{
+		int r=farmUseItem(m,cursorBlock,i,j,k,cursorDir);
+		if(r)return r==2;
+	}
+	if(survivalEat())return false;                                    // food is eaten, not placed
+	if(!cursorBlock || !survivalCanPlace(cursorBlock))return false;   // empty hand places nothing
+	mmEffect(SFX_ADD);
 	switch(cursorDir)
 	{
 		case 0:
@@ -130,17 +156,37 @@ void placeBlock(void)
 			break;
 	}
 	testCursor=(testCursorI)+(testCursorJ)*(map).size.x+(testCursorK)*(map).size.y*(map).size.x;
-	if(cursorBlock==11)
+	if(cursorBlock==ITEM_CHEST)
+	{
+		if(!chestPlace(m,testCursorI,testCursorJ,testCursorK))return false;
+		farmBlockChanged(m,testCursorI,testCursorJ,testCursorK);
+		return true;
+	}else if(cursorBlock==ITEM_FURNACE)
+	{
+		if(!furnacePlace(m,testCursorI,testCursorJ,testCursorK))return false;
+		farmBlockChanged(m,testCursorI,testCursorJ,testCursorK);
+		return true;
+	}else if(cursorBlock==ITEM_PUMPKIN)
+	{
+		// the face looks at the player, as in Minecraft
+		u8 st=PUMPKIN_FIRST+chestFacingFromLook(Player.angleZ);
+		if(*getBlockP(m,testCursorI,testCursorJ,testCursorK))return false;
+		changeBlock(&map, testCursorI, testCursorJ, testCursorK, st);
+		if(*getBlockP(m,testCursorI,testCursorJ,testCursorK)!=st)return false;
+		farmBlockChanged(m,testCursorI,testCursorJ,testCursorK);
+		return true;
+	}else if(cursorBlock==11)
 	{
 		changeBlock(&map, testCursorI, testCursorJ, testCursorK, WATERTYPE);
-		addWater(&map, testCursorI, testCursorJ, testCursorK, WATERTYPE);//TEST
+		if(*getBlockP(m,testCursorI,testCursorJ,testCursorK)<WATERTYPE)return false;
+		addWater(&map, testCursorI, testCursorJ, testCursorK, WATERTYPE);
 	}else if(cursorBlock==LADDERTYPE)
 	{
-		if(cursorDir<2)return;
-		if(isLadder(*getBlockP(m,i,j,k)) || isDoor(*getBlockP(m,i,j,k)) || *getBlockP(m,i,j,k)==13)return;
+		if(cursorDir<2)return false;
+		if(isLadder(*getBlockP(m,i,j,k)) || isDoor(*getBlockP(m,i,j,k)) || *getBlockP(m,i,j,k)==13)return false;
 		i=testCursorI;j=testCursorJ;k=testCursorK;
 		u8 *d=(getBlockP(m,i,j,k));
-		if(*d)return;
+		if(*d)return false;
 		*d=LADDERTYPE+cursorDir-2;
 		vect3D clusterCoord=getCluster(m,i,j,k);
 		quadList_struct* ql=&m->superCluster[clusterCoord.x-m->offset.x][clusterCoord.y-m->offset.y]->cluster[clusterCoord.z-m->offset.z].quadList;
@@ -166,16 +212,15 @@ void placeBlock(void)
 		}
 		getLight(m, i, j, k, &light, 10+dir-2);
 		addQuad(ql, m, 10+dir-2, light, bid, m->superCluster[clusterCoord.x-m->offset.x][clusterCoord.y-m->offset.y]->data, i, j, k);
-		// changeBlock(&map, testCursorI, testCursorJ, testCursorK, LADDERTYPE);
 	}else if(cursorBlock==DOORTYPE)
 	{
-		if(cursorDir)return;
+		if(cursorDir)return false;
 		i=testCursorI;j=testCursorJ;k=testCursorK;
 		u8 *d=(getBlockP(m,i,j,k));
-		if(*d)return;
+		if(*d)return false;
 		i=testCursorI;j=testCursorJ;k=testCursorK+1;
 		u8 *d2=(getBlockP(m,i,j,k));
-		if(*d2)return;
+		if(*d2)return false;
 		u8 dir;
 		if(Player.angleZ<4096 || Player.angleZ>=32768-4096)
 		{
@@ -211,19 +256,63 @@ void placeBlock(void)
 			addQuad(ql2, m, dir+8, light, bid, m->superCluster[clusterCoord2.x-m->offset.x][clusterCoord2.y-m->offset.y]->data, i, j, k-1);
 			m->superCluster[clusterCoord2.x-m->offset.x][clusterCoord2.y-m->offset.y]->changed=1;
 			m->superCluster[clusterCoord.x-m->offset.x][clusterCoord.y-m->offset.y]->changed=1;
-		// changeBlock(&map, testCursorI, testCursorJ, testCursorK, DOORTYPE+1);
-		// changeBlock(&map, testCursorI, testCursorJ, testCursorK+1, DOORTYPE);
 	}else{
-		changeBlock(&map, testCursorI, testCursorJ, testCursorK, cursorBlock);
+		// leaves placed by the player never decay; saplings need grass or dirt
+		u8 placed=(cursorBlock==LEAVES_BLOCK)?LEAVES_PLACED:cursorBlock;
+		if(isSapling(placed))
+		{
+			u8 below=(testCursorK>0)?*getBlockP(m,testCursorI,testCursorJ,testCursorK-1):0;
+			if((below!=1 && below!=2) || *getBlockP(m,testCursorI,testCursorJ,testCursorK))return false;
+		}
+		// changeBlock refuses a block where the player stands (as in Minecraft):
+		// it only counts as placed, and uses up an item, if it is really there
+		changeBlock(&map, testCursorI, testCursorJ, testCursorK, placed);
+		if(*getBlockP(m,testCursorI,testCursorJ,testCursorK)!=placed)return false;
+		farmBlockChanged(m,testCursorI,testCursorJ,testCursorK);
+		return true;
 	}
+	return true;
+}
+
+// Survival: holding the dig button mines the block over time.
+// Creative: the block breaks when the button is released.
+void destroyBlock(void);
+
+// with the inventory open the buttons belong to it (as in Minecraft)
+static inline bool worldInput(void)
+{
+	return !invOpen;
+}
+
+static void updateDigging(bool held)
+{
+	if(!survivalEnabled())return;
+	if(!worldInput())held=false;
+	if(!held){survivalStopMining();return;}
+	if(survivalMine())
+	{
+		cubeAngleX=-1;
+		destroyBlock();
+	}
+	else if(survivalMiningTicks()%8==1)mmEffect(SFX_STEP);
+}
+
+static void usePlace(void)
+{
+	if(!worldInput())return;
+	if(!cursorValid){survivalEat();return;}                           // eating needs no block in sight
+	if(placeBlock())survivalConsume(cursorBlock);
 }
 
 void destroyBlock(void)
 {
-	mmEffect(SFX_REMOVE);
+	if(!cursorValid)return;
 	map_struct* m=&map;
 	int i=testCursorI, j=testCursorJ, k=testCursorK;
 	u8 ot=*getBlockP(m,i,j,k);
+	if(!survivalCanBreak(ot))return;
+	mmEffect(SFX_REMOVE);
+	survivalBlockBroken(ot,i,j,k);
 	if(ot>=DOORTYPE && ot<DOORTYPE+16)
 	{
 		if((ot-DOORTYPE)%2)k++;
@@ -234,24 +323,48 @@ void destroyBlock(void)
 		*getBlockP(m,i,j,k-1)=0;
 		return;
 	}
+	if(isChestBlock(ot))chestBroken(m,i,j,k,ot);
+	if(isFurnaceBlock(ot))furnaceBroken(m,i,j,k);
 	changeBlock(&map, testCursorI, testCursorJ, testCursorK, 0);
+	if(!*getBlockP(m,i,j,k))
+	{
+		plantsBlockRemoved(m,i,j,k,ot);
+		farmBlockChanged(m,i,j,k);
+	}
 }
 
 u8 holdABXY;
 u8 doubletap;
 
+// Double presses, within 7 Minecraft ticks (10 updates here): forward twice
+// sprints, jump twice starts or stops flying in creative.
+#define DOUBLE_PRESS 10
+static int forwardTimer, jumpTimer;
+static bool touchJump;             // scheme 1: the stylus stays down after a jump
+
+static void jumpInput(void)
+{
+	if(noclip)return;
+	if(!survivalEnabled())
+	{
+		if(jumpTimer)
+		{
+			jumpTimer=0;
+			Player.flying=!Player.flying;
+			Player.flyVX=Player.flyVY=0;
+			if(Player.flying && Player.vector.z<0)Player.vector.z=0;
+			return;
+		}
+		jumpTimer=1;
+	}
+	if(!Player.flying && (Player.inWater || !Player.vector.z))Player.vector.z+=JUMP_SPEED;
+}
+
 void controlScheme1(void)
 {
 	u16 keys = keysHeld();
-	// if((keysHeld() & KEY_A)) {sunZ += 400;}
-	// if((keysDown() & KEY_START)) {DS_ChangeState(&Game_State);}
-	// if((keysHeld() & KEY_Y) && (keysHeld() & KEY_START)) {sunX += 400;}
-	// if((keysHeld() & KEY_Y)) {sunX += 20;}
-	// iprintf("\nsun %d %d    ",sunX,sunZ);
-	// if(!noclip && (Player.inWater || !Player.vector.z) && (keysDown() & KEY_A)) {Player.vector.z += 850;}
 	if(!noclip)
 	{
-		// if((keysDown() & KEY_A)) {Player.vector.z += 1400;}
 		if((keys & KEY_LEFT) || (keys & KEY_Y)) {walkSfx++;Player.vector.y += cosLerp(Player.angleZ-8192)>>3;Player.vector.x += sinLerp(Player.angleZ-8192)>>3;if(!Player.vector.z)walkAngle+=2500;}
 		if((keys & KEY_RIGHT) || (keys & KEY_A)) {walkSfx++;Player.vector.y += cosLerp(Player.angleZ+8192)>>3;Player.vector.x += sinLerp(Player.angleZ+8192)>>3;if(!Player.vector.z)walkAngle+=2500;}
 	}else{
@@ -259,16 +372,14 @@ void controlScheme1(void)
 		if((keys & KEY_RIGHT) || (keys & KEY_A)) tempAngle.z += 500;
 	}
 	
-		// if((keysDown() & KEY_X)) noclip^=1;//DEBUG (speed)
-		// if(noclip)if((keys & KEY_UP) || (!gameSettings.controls && (keys & KEY_X))) {Player.vector.y = mulf32(cosLerp(Player.angleZ),cosLerp(Player.angleX))>>1;Player.vector.x = mulf32(sinLerp(Player.angleZ),cosLerp(Player.angleX))>>1;Player.vector.z = -sinLerp(Player.angleX)>>1;}
-		
 		
 	touchRead(&thisXY);
 	
 	if(doubletap)doubletap++;
 	if(doubletap>15)doubletap=0;
 	if((keysDown() & KEY_TOUCH) && !doubletap)doubletap=1;
-	else if((keysDown() & KEY_TOUCH) && doubletap && !noclip && (Player.inWater || !Player.vector.z) && !invOpen && !overButtons){Player.vector.z += 850;doubletap=0;}
+	else if((keysDown() & KEY_TOUCH) && doubletap && !invOpen && !overButtons){jumpInput();doubletap=0;touchJump=true;}
+	if(!(keysHeld() & KEY_TOUCH))touchJump=false;
 	
 	if(updateInterface() && !overButtons && (keysHeld() & KEY_TOUCH))
 	{
@@ -294,20 +405,6 @@ void controlScheme1(void)
 	}
 	if(keysHeld() & KEY_TOUCH)lastXY = thisXY;
 	
-	/*if((keysUp() & KEY_X))noclip=!noclip;
-	if((keysUp() & KEY_START))
-	{
-		writeStats(&frameTime,"frame","stats");
-		writeStats(&streamRead,"streaming","stats");
-		writeStats(&streamCalc,"streaming2","stats");
-		char str[255];
-		sprintf(str, "write (%d)",TESTVALUE3);
-		writeStats(&columnWrite,str,"stats");
-		writeStats(&freeRam,"ram","stats");
-	}*/
-	
-	// iprintf("\nselected block : %d    ",cursorBlock);
-	// iprintf("\noffset : %d %d %d    ",map.offset.x,map.offset.y,map.offset.z);
 	
 	testCursorI=testCursor%map.size.x;
 	testCursorJ=((testCursor-testCursorI)%(map.size.x*map.size.y))/(map.size.x);
@@ -319,11 +416,12 @@ void controlScheme1(void)
 		cubeAngleX=-1;
 		if(action)
 		{
-			destroyBlock();
+			if(!survivalEnabled() && worldInput())destroyBlock();
 		}else{
-			placeBlock();
+			usePlace();
 		}
 	}
+	updateDigging(action && (keysHeld() & (KEY_R|KEY_L)));
 }
 
 void controlScheme2(void)
@@ -338,25 +436,18 @@ void controlScheme2(void)
 	{
 		tempCursor++;
 		tempCursor%=9;
-		// NOGBA("cursor : %d => %d (%d)",tempCursor,cursorBlock,slots[testCursor].id);
-		int i;
-		for(i=0;i<MAXITEMS;i++)
-		{
-			if(items[i].used && items[i].slot==tempCursor)
-			{
-				cursorBlock=items[i].type;
-				break;
-			}
-		}
+		if(survivalEnabled())inventorySelect(tempCursor);
+		else creativeSelect(tempCursor);
 	}
-	if(!noclip && (Player.inWater || !Player.vector.z) && (keysDown() & KEY_A)) {Player.vector.z += 850;}
+	if(keysDown() & KEY_A)jumpInput();
+	updateDigging(keysHeld() & KEY_R);
 	if(keysUp() & KEY_R)
 	{
 		cubeAngleX=-1;
-		destroyBlock();
+		if(!survivalEnabled() && worldInput())destroyBlock();
 	}else if(keysUp() & KEY_L){
 		cubeAngleX=-1;
-		placeBlock();
+		usePlace();
 	}
 	touchRead(&thisXY);
 	updateInterface();
@@ -371,17 +462,18 @@ void controlScheme3(void)
 	if((keys & KEY_RIGHT)) tempAngle.z += 500;
 	if((keys & KEY_X)) tempAngle.x -= 500;
 	if((keys & KEY_B)) tempAngle.x += 500;
-	if(!noclip && (Player.inWater || !Player.vector.z) && (keysDown() & KEY_A)) {Player.vector.z += 850;}
+	if(keysDown() & KEY_A)jumpInput();
 	if(keysUp() & KEY_Y)
 	{
 		cubeAngleX=-1;
 		if(action)
 		{
-			destroyBlock();
+			if(!survivalEnabled() && worldInput())destroyBlock();
 		}else{
-			placeBlock();
+			usePlace();
 		}
 	}
+	updateDigging(action && (keysHeld() & KEY_Y));
 	touchRead(&thisXY);
 	updateInterface();
 	if(keysHeld() & KEY_TOUCH)lastXY = thisXY;
@@ -389,14 +481,31 @@ void controlScheme3(void)
 
 void updateControls(void)
 {
+	if(survivalInputLocked())
+	{
+		tempAngle=(vect3D){0,0,0};
+		return;
+	}
 	if(testBuffer)
 	{
 		scanKeys();
 		tempAngle=(vect3D){0,0,0};
 		u16 keys = keysHeld();
-		if(!noclip && !Player.inWater && !Player.onLadder)
 		{
-			// if((keysDown() & KEY_A)) {Player.vector.z += 1400;}
+			bool forward=(keys & KEY_UP) || (!gameSettings.controls && (keys & KEY_X));
+			bool forwardDown=(keysDown() & KEY_UP) || (!gameSettings.controls && (keysDown() & KEY_X));
+			Player.sneaking=(keys & KEY_SELECT) && !noclip;
+			if(forwardTimer && ++forwardTimer>DOUBLE_PRESS)forwardTimer=0;
+			if(jumpTimer && ++jumpTimer>DOUBLE_PRESS)jumpTimer=0;
+			if(forwardDown)
+			{
+				if(forwardTimer && !Player.sneaking && !Player.inWater)Player.sprinting=true;
+				forwardTimer=1;
+			}
+			if(!forward || Player.sneaking || Player.inWater || noclip)Player.sprinting=false;
+		}
+		if(!noclip && (Player.flying || (!Player.inWater && !Player.onLadder)))
+		{
 			if((keys & KEY_UP) || (!gameSettings.controls && (keys & KEY_X))) {walkSfx++;Player.vector.y = cosLerp(Player.angleZ)>>3;Player.vector.x = sinLerp(Player.angleZ)>>3;if(!Player.vector.z)walkAngle+=2500;}
 			if((keys & KEY_DOWN) || (!gameSettings.controls && (keys & KEY_B))) {walkSfx++;Player.vector.y = -cosLerp(Player.angleZ)>>3;Player.vector.x = -sinLerp(Player.angleZ)>>3;if(!Player.vector.z)walkAngle-=2500;}
 		}else if(Player.inWater){
@@ -410,12 +519,14 @@ void updateControls(void)
 			if((keys & KEY_DOWN) || (!gameSettings.controls && (keys & KEY_B))) {Player.vector.y = -mulf32(cosLerp(Player.angleZ),cosLerp(Player.angleX))>>3;Player.vector.x = -mulf32(sinLerp(Player.angleZ),cosLerp(Player.angleX))>>3;Player.vector.z = sinLerp(Player.angleX)>>3;}
 		}
 		if(!(keysHeld() & KEY_A) && !(keysHeld() & KEY_B) && !(keysHeld() & KEY_X) && !(keysHeld() & KEY_Y))holdABXY=false;
-		if(!holdABXY && (keysHeld() & KEY_A) && (keysHeld() & KEY_B) && (keysHeld() & KEY_X) && (keysHeld() & KEY_Y))
+		if(!holdABXY && !survivalEnabled() && (keysHeld() & KEY_A) && (keysHeld() & KEY_B) && (keysHeld() & KEY_X) && (keysHeld() & KEY_Y))
 		{
 			holdABXY=true;
 			noclip^=1;
+			Player.flying=false;
 		}
-		if((keysDown() & KEY_START)) {DS_ChangeState(&Menu_State);}
+		if((keysDown() & KEY_START)) {gamePause(true);return;}
+		if(Player.sneaking || Player.flying)walkSfx=0;            // sneaking and flying make no steps
 		if(oldwAngle!=walkSfx && ((walkSfx)>=10) && !Player.vector.z){mmEffect(SFX_STEP);walkSfx=0;}
 		oldwAngle=walkSfx;
 		switch(gameSettings.controls)
@@ -429,6 +540,10 @@ void updateControls(void)
 			default:
 				controlScheme1();
 				break;
+		}
+		{
+			// held jump: A, or in scheme 1 the stylus kept down after the jump's double tap
+			Player.jumpHeld=gameSettings.controls?((keysHeld() & KEY_A)!=0):(touchJump && (keysHeld() & KEY_TOUCH));
 		}		
 	}
 	
