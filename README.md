@@ -15,6 +15,43 @@ crafting, dropped items, the world generator (including Superflat), world
 management and fixes: "The Survival Update" by mostazaniikkkk. The in-game
 credits are under "Credits" in the main menu.
 
+### Bug fixes
+
+Engine and menu:
+- Builds again with a current devkitARM (libnds 1.8.3, libfat 1.1.5); the map
+  streaming code no longer needs a patched libfat, and the missing math
+  library is linked.
+- Going out of the world and breaking a block no longer crashes the game
+  (issue in the original repo): the world has a border, positions outside it
+  read as air, and the cursor never targets them.
+- The menu draws each screen's scene on its own screen: part of the top
+  screen no longer shows on the bottom one, and the screens are not swapped.
+- Creating a world no longer flickers between the screens: only the top
+  screen is drawn while it is generated.
+- The splash screens before the title screen are gone.
+- A texture that does not fit in video memory is no longer written over the
+  start of memory (which left the menu black); the menu uses a smaller block
+  atlas.
+- Removing a torch whose light had not been worked out yet no longer darkens
+  the blocks around it.
+- Plants drawn as crossed planes (torches excepted) are shaded like the rest
+  of the world instead of always at full light, at night and in caves too.
+- Screenshots no longer crash when the `screens` folder is missing, and are
+  written a row at a time.
+- Typed seeds: -1 is no longer the same world as 0.
+
+Playing:
+- A block is used up only when it is really placed (not when it is refused
+  under the player), and blocks can be placed while jumping.
+- The place button only acts on the block the cursor points at: the cursor
+  no longer keeps an old block once it points at nothing.
+- Fall damage counts the whole fall (it was measured one step late).
+- Dropped items no longer scatter as far as they did.
+- Netherrack needs a pickaxe, soul sand prefers a shovel and glowstone breaks
+  quickly (they were treated as wooden blocks).
+- The chest and furnace screens keep the window's frame (borders and the line
+  above the inventory).
+
 ## Building
 
 The game needs devkitARM with libnds 1.x and libfat 1.1.x (it uses libfat
