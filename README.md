@@ -167,7 +167,7 @@ like the bundled ones, are creative.
     torch (coal or charcoal on a stick -> 4), chest (8 planks around an empty
     centre), furnace (8 cobblestone around an empty centre), wooden and stone
     hoe, pumpkin -> 4 pumpkin seeds, and iron pickaxe / shovel / axe / hoe
-    from iron ingots.
+    and iron armour from iron ingots.
   - Closing the window puts the grid back in the inventory; what does not fit
     is thrown.
 - Chests: 27 slots, opened with the place button. Two chests side by side
@@ -219,6 +219,13 @@ like the bundled ones, are creative.
   (the Beta packs have none); crops are drawn as crossed planes, since the
   engine places vertices on half-block steps (Minecraft's # shape needs
   quarters), and farmland is a full block.
+- Iron armour (Minecraft Beta 1.7): helmet (5 ingots), chestplate (8),
+  leggings (7) and boots (4), worn in the four slots on the left of the
+  inventory screen (each slot takes only its piece). Every armour point takes
+  away 4% of the damage (falls, drowning and the void too): 3, 8, 6 and 3
+  points, 20 for the full set, less as the pieces wear. A hit wears each piece
+  by a quarter of its damage (at least 1); they last 132, 192, 180 and 156
+  hits. The armour bar shows above the item bar, on the right.
 - Tools: wooden, stone and iron pickaxe, shovel and axe (and hoes). The tool
   in the selected slot is used. Wooden tools last 60 uses, stone 132, iron
   251; a bar on the icon shows the wear. Iron is faster (Beta's efficiency 6)

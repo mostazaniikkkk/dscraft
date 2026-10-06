@@ -28,6 +28,10 @@
 #define ITEM_IRON_AXE 109
 #define ITEM_IRON_HOE 110
 
+#define ITEM_IRON_HELMET 150       // iron armour: helmet, chestplate, leggings, boots
+#define ITEM_IRON_BOOTS 153
+#define ARMOR_ICON_SLOT 52         // their pictures are drawn in icons 52..55 (free when items are loaded)
+
 #define FARMLAND_FIRST 112         // + moisture 0..7 (0: dry)
 #define CARROT_FIRST 120           // + growth stage 0..7
 #define STEM_FIRST 128             // pumpkin stem, + growth stage 0..7
@@ -43,6 +47,8 @@ static inline bool isAttachedStem(u8 t){ return t>=STEM_ATTACHED && t<STEM_ATTAC
 static inline bool isPumpkin(u8 t){ return t>=PUMPKIN_FIRST && t<PUMPKIN_FIRST+4; }
 static inline bool isHoe(u8 t){ return t==ITEM_WOOD_HOE || t==ITEM_STONE_HOE || t==ITEM_IRON_HOE; }
 // held items above 63 that are blocks (drawn as cubes, placed)
+static inline bool isArmor(u8 t){ return t>=ITEM_IRON_HELMET && t<=ITEM_IRON_BOOTS; }
+static inline int armorType(u8 t){ return t-ITEM_IRON_HELMET; }     // 0 helmet .. 3 boots
 static inline bool isCubeItem(u8 t){ return t==ITEM_PUMPKIN || t==ITEM_IRON_ORE; }
 // drawn as crossed planes, walked through, see-through
 static inline bool isPlant(u8 t){ return isSapling(t) || isCarrotCrop(t) || isStem(t); }

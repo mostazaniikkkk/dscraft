@@ -407,10 +407,10 @@ const block_struct blocks[]={(block_struct){0,0,0},
 							(block_struct){0,0,0},
 							(block_struct){0,0,0},
 							(block_struct){0,0,0},
-							(block_struct){0,0,0},
-							(block_struct){0,0,0},
-							(block_struct){0,0,0},
-							(block_struct){0,0,0},
+							(block_struct){99,99,99},//iron armour (item texture)
+							(block_struct){100,100,100},//iron armour (item texture)
+							(block_struct){101,101,101},//iron armour (item texture)
+							(block_struct){102,102,102},//iron armour (item texture)
 							(block_struct){0,0,0},
 							(block_struct){0,0,0},
 							(block_struct){0,0,0},

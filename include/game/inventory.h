@@ -19,10 +19,11 @@
 #define SLOT_GRID 36               // 36..44 crafting grid cells
 #define SLOT_RESULT 45
 #define SLOT_HELD 46               // the stack carried by the stylus (display only)
-#define UI_SLOTS 47
-#define SLOT_CHEST 47              // 47..100: an open chest (27 slots, 54 for a double chest)
+#define SLOT_ARMOR 47              // 47..50: worn armour, helmet to boots
+#define UI_SLOTS 51
+#define SLOT_CHEST 51              // 51..104: an open chest (27 slots, 54 for a double chest)
 #define CHEST_VIEW 27              // chest slots on screen at a time (a double chest has two pages)
-#define SLOT_FURNACE 101           // 101..103: an open furnace (input, fuel, output)
+#define SLOT_FURNACE 105           // 105..107: an open furnace (input, fuel, output)
 #define SLOT_PAGE_UP -3
 #define SLOT_PAGE_DOWN -4
 #define CHEST_SPRITES (CHEST_VIEW+2)

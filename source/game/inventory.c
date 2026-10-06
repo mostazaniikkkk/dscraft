@@ -24,7 +24,7 @@ u8 itemMaxStack(u8 item)
 	if(isTool(item))return 1;
 	if(item==DOORTYPE || item==11)return 1;   // wooden door, water bucket
 	if(item==ITEM_APPLE)return 1;            // Beta food does not stack
-	if(isHoe(item))return 1;
+	if(isHoe(item) || isArmor(item))return 1;
 	return MAX_STACK;
 }
 
@@ -42,6 +42,7 @@ stack_struct* inventorySlot(int slot)
 	if(slot>=0 && slot<INV_SLOTS)return &d->slots[slot];
 	if(slot>=SLOT_GRID && slot<SLOT_GRID+CRAFT_CELLS)return &d->grid[slot-SLOT_GRID];
 	if(slot==SLOT_HELD)return &d->held;
+	if(slot>=SLOT_ARMOR && slot<SLOT_ARMOR+4)return &d->armor[slot-SLOT_ARMOR];
 	if(slot>=SLOT_CHEST && slot<SLOT_CHEST+2*CHEST_SLOTS)
 	{
 		int n=slot-SLOT_CHEST;
@@ -50,6 +51,18 @@ stack_struct* inventorySlot(int slot)
 	}
 	if(slot>=SLOT_FURNACE && slot<SLOT_FURNACE+FURNACE_SLOTS)return furnace?&furnace->slots[slot-SLOT_FURNACE]:NULL;
 	return NULL;
+}
+
+static inline bool isArmorSlot(int slot)
+{
+	return slot>=SLOT_ARMOR && slot<SLOT_ARMOR+4;
+}
+
+// an armour slot takes only its own piece (Minecraft's SlotArmor)
+static bool fitsSlot(int slot, const stack_struct* s)
+{
+	if(isArmorSlot(slot))return isArmor(s->item) && armorType(s->item)==slot-SLOT_ARMOR;
+	return true;
 }
 
 static inline bool isFurnaceSlot(int slot)
@@ -182,6 +195,10 @@ static const recipe_struct recipes[]={
 	{{"I","S","S"},         ITEM_IRON_SHOVEL,1},
 	{{"II","IS",".S"},      ITEM_IRON_AXE,1},
 	{{"II",".S",".S"},      ITEM_IRON_HOE,1},
+	{{"III","I.I"},         ITEM_IRON_HELMET,1},
+	{{"I.I","III","III"},   ITEM_IRON_HELMET+1,1},   // chestplate
+	{{"III","I.I","I.I"},   ITEM_IRON_HELMET+2,1},   // leggings
+	{{"I.I","I.I"},         ITEM_IRON_BOOTS,1},
 	{{"U"},                 ITEM_PUMPKIN_SEEDS,4},     // Minecraft 1.4
 };
 #define RECIPES ((int)(sizeof(recipes)/sizeof(recipes[0])))
@@ -387,6 +404,9 @@ void inventoryClick(int slot, bool right, bool shift)
 
 	if(shift){quickMove(slot);return;}
 
+	// an armour slot refuses anything but its piece
+	if(isArmorSlot(slot) && !isEmpty(held) && !fitsSlot(slot,held))return;
+
 	// the furnace output only gives: take it, or add all of it to the held stack
 	if(isFurnaceSlot(slot) && slot==SLOT_FURNACE+FURNACE_OUT && !isEmpty(held))
 	{
@@ -459,6 +479,7 @@ static bool dragTarget(int slot)
 {
 	if(chestA)return (slot>=0 && slot<INV_SLOTS) || isChestSlot(slot);
 	if(furnace)return (slot>=0 && slot<INV_SLOTS) || slot==SLOT_FURNACE+FURNACE_IN || slot==SLOT_FURNACE+FURNACE_FUEL;
+	if(isArmorSlot(slot))return !tableOpen;
 	return (slot>=0 && slot<INV_SLOTS) || (slot>=SLOT_GRID && slot<SLOT_GRID+CRAFT_CELLS && inventoryCellActive(slot-SLOT_GRID));
 }
 
@@ -481,6 +502,7 @@ static void spread(void)
 	for(i=0;i<dragCount;i++)
 	{
 		stack_struct* s=inventorySlot(dragSlots[i]);
+		if(!fitsSlot(dragSlots[i],held))continue;
 		if(isEmpty(s) || (s->item==held->item && s->count<max))targets[n++]=dragSlots[i];
 	}
 	if(n>held->count)n=held->count;           // never fewer than one item per slot
@@ -661,6 +683,8 @@ static const u8 grid2X[4]={135,153,135,153}, grid2Y[4]={52,52,70,70};
 #define PAGEX 236                // page arrows of a double chest
 #define PAGEUPY 41
 #define PAGEDOWNY 77
+#define ARMORX 55                // the inventory screen's armour slots (Beta's 8, 8+18n, +47, +26)
+#define ARMORY 34
 #define FURNACEINX 103           // furnace screen: Beta's layout (+47, +26)
 #define FURNACEINY 43
 #define FURNACEFUELY 79
@@ -691,6 +715,14 @@ static bool slotPos(int slot, bool open, int* x, int* y)
 	{
 		*x=INVX+((slot-INV_HOTBAR)%9)*INVD;
 		*y=INVY+((slot-INV_HOTBAR)/9)*INVD;
+		return true;
+	}
+	if(isArmorSlot(slot))
+	{
+		// only on the inventory screen, as in Minecraft
+		if(furnace || chestA || tableOpen)return false;
+		*x=ARMORX;
+		*y=ARMORY+(slot-SLOT_ARMOR)*INVD;
 		return true;
 	}
 	if(furnace)
@@ -730,6 +762,11 @@ int inventorySlotAt(int px, int py)
 	int s, x, y;
 	if(py<TOPBAR)return SLOT_NONE;
 	for(s=0;s<SLOT_HELD;s++)
+	{
+		if(!slotPos(s,windowOpen,&x,&y))continue;
+		if(px>=x-1 && px<x+17 && py>=y-1 && py<y+17)return s;
+	}
+	for(s=SLOT_ARMOR;s<SLOT_ARMOR+4;s++)
 	{
 		if(!slotPos(s,windowOpen,&x,&y))continue;
 		if(px>=x-1 && px<x+17 && py>=y-1 && py<y+17)return s;
@@ -979,6 +1016,11 @@ void inventoryUpdateUI(bool open)
 		if(s==SLOT_RESULT){craftingResult(&r);st=&r;}
 		else st=inventorySlot(s);
 		showSlot(s,st,x,y);
+	}
+	for(s=SLOT_ARMOR;s<SLOT_ARMOR+4;s++)
+	{
+		if(!slotPos(s,open,&x,&y)){hideSlot(s);continue;}
+		showSlot(s,inventorySlot(s),x,y);
 	}
 	updateChestView(open);
 	updateFurnaceView(open);

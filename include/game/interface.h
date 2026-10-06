@@ -1,7 +1,7 @@
 #ifndef INTERFACE_9
 #define INTERFACE_9
 
-#define MAXITEMS 64
+#define MAXITEMS 56                // the inventory's 51 slots (and the creative catalogue) fit
 #define MAXSLOTS 64
 
 u8 usedSprites;

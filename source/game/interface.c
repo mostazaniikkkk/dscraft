@@ -235,7 +235,7 @@ void initInterface(void)
 		id++;
 	}
 	survivalInitSprites(id);
-	id+=SURVIVAL_HEARTS;
+	id+=SURVIVAL_HUD_SPRITES;
 	inventoryInitChestSprites(id);
 	id+=CHEST_SPRITES;
 	usedSprites=id;

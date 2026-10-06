@@ -1,4 +1,5 @@
 #include "game/game_main.h"
+#include <stddef.h>
 
 bool cursorValid=false;
 bool packHasItems=true;
@@ -32,6 +33,10 @@ static u8 heartSprite;
 #define ICON_HEART_FULL 96
 #define ICON_HEART_HALF 97
 #define ICON_HEART_EMPTY 98
+#define ICON_ARMOR_FULL 56          // the armour bar's three pictures (icons free once items are loaded)
+#define ICON_ARMOR_HALF 57
+#define ICON_ARMOR_EMPTY 58
+#define ARMORX 230                  // the armour bar: right to left, as in Beta
 
 #define HEARTX 59
 #define HEARTY 156
@@ -115,6 +120,8 @@ u16 survivalToolDurability(u8 tool)
 	if(tool==ITEM_WOOD_HOE)return HOE_DURABILITY_WOOD;
 	if(tool==ITEM_STONE_HOE)return HOE_DURABILITY_STONE;
 	if(tool==ITEM_IRON_HOE)return HOE_DURABILITY_IRON;
+	// Beta's iron armour: {11, 16, 15, 13} * 3 << 2 hits, and one more before it breaks
+	if(isArmor(tool)){ static const u16 d[4]={133,193,181,157}; return d[armorType(tool)]; }
 	return toolTier(tool)==1?60:(toolTier(tool)==2?132:(toolTier(tool)==3?251:0));
 }
 
@@ -181,6 +188,17 @@ static bool upgradeSave(survivalSave_struct* s)
 	int n, i;
 	if(s->magic!=SURVIVAL_MAGIC)return false;
 	if(s->version==SURVIVAL_VERSION)return s->checksum==saveChecksum(s);
+	if(s->version==3)
+	{
+		// version 3 ended where the armour now starts: nothing worn yet
+		u32 old;
+		memcpy(&old,(u8*)s+offsetof(survivalSave_struct,armor),sizeof(u32));
+		if(old!=checksumBytes((u8*)s,offsetof(survivalSave_struct,armor)))return false;
+		memset(s->armor,0,sizeof(s->armor));
+		s->version=SURVIVAL_VERSION;
+		s->checksum=saveChecksum(s);
+		return true;
+	}
 	if(s->version!=1 && s->version!=2)return false;
 	memset(wear,0,sizeof(wear));
 	if(!readOldSave(s,counts,&n,wear))return false;
@@ -273,8 +291,50 @@ void survivalDrawItemIcon(int dst, const stack_struct* s)
 {
 	if(!s->count || !s->item){copyIcon(dst,0xFF);return;}
 	copyIcon(dst,s->item);
-	if((isTool(s->item) || isHoe(s->item)) && s->wear)drawWearBar(dst,s->wear,survivalToolDurability(s->item));
+	if((isTool(s->item) || isHoe(s->item) || isArmor(s->item)) && s->wear)drawWearBar(dst,s->wear,survivalToolDurability(s->item));
 	if(s->count>1)drawDigits(dst,s->count,WHITE);
+}
+
+// The armour bar's pictures: from the pack's gui/icons.png (Beta: empty 16,9,
+// half 25,9, full 34,9, 9x9 each), else drawn
+static u16 armorIcons[3][81];
+static bool armorIconsLoaded;
+
+void survivalLoadArmorIcons(const unsigned char* rgba, int width, int height)
+{
+	int n, x, y;
+	armorIconsLoaded=false;
+	if(!rgba || width!=256 || height<18)return;
+	for(n=0;n<3;n++)for(y=0;y<9;y++)for(x=0;x<9;x++)
+	{
+		const unsigned char* p=&rgba[((16+n*9+x)+(9+y)*width)*4];
+		armorIcons[n][x+y*9]=p[3]?(RGB15(p[0]>>3,p[1]>>3,p[2]>>3)|BIT(15)):0;
+	}
+	armorIconsLoaded=true;
+}
+
+static void drawArmorIcons(void)
+{
+	static const u8 icon[3]={ICON_ARMOR_EMPTY,ICON_ARMOR_HALF,ICON_ARMOR_FULL};
+	int n, x, y;
+	for(n=0;n<3;n++)
+	{
+		for(y=0;y<16;y++)for(x=0;x<16;x++)*iconPixel(icon[n],x,y)=0;
+		for(y=0;y<9;y++)for(x=0;x<9;x++)
+		{
+			u16 c;
+			if(armorIconsLoaded)c=armorIcons[n][x+y*9];
+			else
+			{
+				// a chestplate: outline, and filled as far as it counts
+				bool in=y>=1 && y<8 && x>=1 && x<8 && !(y<3 && x>=3 && x<=5);
+				bool edge=!in && y<9 && !(y<3 && x>=3 && x<=5) && (y==0 || y==8 || x==0 || x==8 || (y<=3 && (x==2 || x==6)));
+				bool filled=in && (n==2 || (n==1 && x<5));
+				c=filled?(RGB15(26,26,27)|BIT(15)):((in || edge)?(RGB15(4,4,4)|BIT(15)):0);
+			}
+			*iconPixel(icon[n],x,y)=c;
+		}
+	}
 }
 
 static void drawHeart(int id, u16 left, u16 right)
@@ -360,6 +420,24 @@ static void drawAppleFallback(int id)
 	}
 }
 
+// Iron armour, drawn when the texture pack has no gui/items.png
+static void drawArmorFallback(int id, int type)
+{
+	static const char* const shape[4][8]={
+		{"..xxxxxx..",".xxxxxxxx.",".xx....xx.",".xx....xx.","..........","..........","..........",".........."},
+		{"xxx....xxx","xxxxxxxxxx",".xxxxxxxx.",".xxxxxxxx.",".xxxxxxxx.",".xxxxxxxx.",".xxxxxxxx.","..........",},
+		{".xxxxxxxx.",".xxxxxxxx.",".xxx..xxx.",".xxx..xxx.",".xx....xx.",".xx....xx.",".xx....xx.",".........."},
+		{"..........","..........","..........",".xx....xx.",".xx....xx.","xxx....xxx","xxx....xxx",".........."}};
+	int x, y;
+	for(y=0;y<16;y++)for(x=0;x<16;x++)*iconPixel(id,x,y)=0;
+	for(y=0;y<8;y++)for(x=0;x<10;x++)
+	{
+		if(shape[type][y][x]!='x')continue;
+		*iconPixel(id,3+x,3+y*5/4)=RGB15(25,25,26)|BIT(15);
+		*iconPixel(id,3+x,4+y*5/4)=RGB15(18,18,19)|BIT(15);
+	}
+}
+
 static void loadItemIcons(void)
 {
 	int t;
@@ -373,6 +451,7 @@ static void loadItemIcons(void)
 	drawToolFallback(ITEM_STONE_HOE,TOOLKIND_HOE,2);
 	for(t=ITEM_IRON_PICKAXE;t<=ITEM_IRON_AXE;t++)drawToolFallback(t,toolKind(t),3);
 	drawToolFallback(ITEM_IRON_HOE,TOOLKIND_HOE,3);
+	for(t=0;t<4;t++)drawArmorFallback(ARMOR_ICON_SLOT+t,t);
 	{
 		// an ingot
 		int x, y;
@@ -393,16 +472,20 @@ static void initIcons(void)
 	int i, x, y;
 	for(i=1;i<SURVIVAL_ITEMTYPES;i++)
 	{
-		bool hasIcon=(i<BLOCKS) || i==ITEM_CRAFTING_TABLE || i==ITEM_COAL_ORE || i==ITEM_CHEST || i==ITEM_FURNACE || i==ITEM_CHARCOAL || i==ITEM_SAPLING || i==ITEM_APPLE || (i>=ITEM_CARROT && i<=ITEM_IRON_ORE) || (i>=ITEM_IRON_INGOT && i<=ITEM_IRON_HOE) || (i>=ITEM_TOOL_FIRST && i<=ITEM_COAL);
+		bool hasIcon=(i<BLOCKS) || i==ITEM_CRAFTING_TABLE || i==ITEM_COAL_ORE || i==ITEM_CHEST || i==ITEM_FURNACE || i==ITEM_CHARCOAL || i==ITEM_SAPLING || i==ITEM_APPLE || (i>=ITEM_CARROT && i<=ITEM_IRON_ORE) || (i>=ITEM_IRON_INGOT && i<=ITEM_IRON_HOE) || isArmor(i) || (i>=ITEM_TOOL_FIRST && i<=ITEM_COAL);
 		if(!hasIcon || iconBase[i])continue;
 		iconBase[i]=malloc(16*16*sizeof(u16));
 		if(!iconBase[i])continue;
-		for(y=0;y<16;y++)for(x=0;x<16;x++)iconBase[i][x+y*16]=*iconPixel(i,x,y);
+		{
+			int slot=isArmor(i)?ARMOR_ICON_SLOT+armorType(i):i;   // armour ids are past the icons' room
+			for(y=0;y<16;y++)for(x=0;x<16;x++)iconBase[i][x+y*16]=*iconPixel(slot,x,y);
+		}
 	}
 	u16 red=RGB15(31,3,3)|BIT(15), dark=RGB15(8,2,2)|BIT(15);
 	drawHeart(ICON_HEART_FULL,red,red);
 	drawHeart(ICON_HEART_HALF,red,dark);
 	drawHeart(ICON_HEART_EMPTY,dark,dark);
+	drawArmorIcons();
 }
 
 /* ---------------------------------------------------------------------------
@@ -413,7 +496,7 @@ void survivalInitSprites(u8 firstSprite)
 {
 	int i;
 	heartSprite=firstSprite;
-	for(i=0;i<SURVIVAL_HEARTS;i++)oamSub.oamMemory[heartSprite+i].attribute[0]=ATTR0_DISABLED;
+	for(i=0;i<SURVIVAL_HUD_SPRITES;i++)oamSub.oamMemory[heartSprite+i].attribute[0]=ATTR0_DISABLED;
 }
 
 void survivalInit(map_struct* m, player_struct* p)
@@ -648,11 +731,59 @@ void survivalBlockBroken(u8 block, int i, int j, int k)
  * Health
  * ------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+ * Armour (Minecraft Beta 1.7: InventoryPlayer.getTotalArmorValue, damageArmor,
+ * EntityPlayer.damageEntity). Each piece counts as much as it has left; every
+ * point of armour takes away 4% of the damage, the rest of a fraction carries
+ * over to the next hit; each piece wears by a quarter of the hit (at least 1).
+ * ------------------------------------------------------------------------- */
+
+static const u8 armorPoints[4]={3,8,6,3};
+static int damageRemainder;
+
+int survivalArmorValue(void)
+{
+	int n, left=0, total=0, points=0;
+	if(!enabled)return 0;
+	for(n=0;n<4;n++)
+	{
+		stack_struct* s=&save->armor[n];
+		if(!s->count || !isArmor(s->item))continue;
+		int max=survivalToolDurability(s->item)-1;
+		total+=max;
+		left+=max-s->wear;
+		points+=armorPoints[armorType(s->item)];
+	}
+	if(!total)return 0;
+	return ((points-1)*left)/total+1;
+}
+
+static void wearArmor(int amount)
+{
+	int n;
+	amount/=4;
+	if(amount<1)amount=1;
+	for(n=0;n<4;n++)
+	{
+		stack_struct* s=&save->armor[n];
+		if(!s->count || !isArmor(s->item))continue;
+		s->wear+=amount;
+		if(s->wear>=survivalToolDurability(s->item)){s->item=0;s->count=0;s->wear=0;}   // broken
+	}
+}
+
 void survivalDamage(u8 amount)
 {
 	if(!enabled || dead || !amount)return;
+	{
+		int k=amount*(25-survivalArmorValue())+damageRemainder;
+		wearArmor(amount);
+		amount=k/25;
+		damageRemainder=k%25;
+	}
 	sinceDamage=0;
 	flashTimer=8;
+	if(!amount)return;
 	if(amount>=save->health)
 	{
 		save->health=0;
@@ -745,6 +876,21 @@ void survivalUpdateHUD(bool inventoryOpen)
 		oamSub.oamMemory[heartSprite+i].attribute[0]=ATTR0_BMP | ATTR0_SQUARE | HEARTY;
 		oamSub.oamMemory[heartSprite+i].attribute[1]=ATTR1_SIZE_16 | (HEARTX+i*HEARTD);
 		oamSub.oamMemory[heartSprite+i].attribute[2]=ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | survivalIconTile(icon);
+	}
+	// the armour bar, only while something is worn (Beta's GuiIngame)
+	{
+		int armor=(enabled && !inventoryOpen)?survivalArmorValue():0;
+		for(i=0;i<SURVIVAL_HEARTS;i++)
+		{
+			u8 sprite=heartSprite+SURVIVAL_HEARTS+i;
+			int icon=ICON_ARMOR_EMPTY;
+			if(!armor){oamSub.oamMemory[sprite].attribute[0]=ATTR0_DISABLED;continue;}
+			if(i*2+1<armor)icon=ICON_ARMOR_FULL;
+			else if(i*2+1==armor)icon=ICON_ARMOR_HALF;
+			oamSub.oamMemory[sprite].attribute[0]=ATTR0_BMP | ATTR0_SQUARE | HEARTY;
+			oamSub.oamMemory[sprite].attribute[1]=ATTR1_SIZE_16 | (ARMORX-i*HEARTD);
+			oamSub.oamMemory[sprite].attribute[2]=ATTR2_ALPHA(1) | ATTR2_PRIORITY(0) | survivalIconTile(icon);
+		}
 	}
 	if(!enabled)return;
 	inventoryUpdateUI(inventoryOpen);

@@ -1,6 +1,7 @@
 /* Host tests for survival.c, inventory.c, drops.c, chest.c, furnace.c, plants.c and farm.c (rules only, no rendering). */
 #include "game/game_main.h"
 #include "maxmod9.h"
+#include <stddef.h>
 
 u16 SPRITE_GFX_SUB[65536];
 OamState oamSub;
@@ -85,7 +86,7 @@ static void setupInterface(void)
 	int i;
 	memset(items,0,sizeof(items));
 	memset(slots,0,sizeof(slots));
-	for(i=0;i<MAXITEMS;i++) items[i].id=40+i>127?127:40+i;
+	for(i=0;i<MAXITEMS;i++) items[i].id=50+i>127?127:50+i;
 	for(i=0;i<MAXSLOTS;i++) slots[i].id=-1;
 }
 
@@ -374,7 +375,7 @@ static void testCrafting(void)
 {
 	int c;
 	setup(true,false);
-	CHECK(craftingRecipes()==21);
+	CHECK(craftingRecipes()==25);
 
 	/* 2x2 grid in the inventory */
 	inventoryOpen(false);
@@ -1654,6 +1655,132 @@ static void testIron(void)
 	survivalKill();
 }
 
+static stack_struct* armorSlot(int n){ return &S()->armor[n]; }
+
+static void testArmor(void)
+{
+	int n, k;
+	CHECK(isArmor(ITEM_IRON_HELMET) && isArmor(ITEM_IRON_BOOTS) && !isArmor(ITEM_IRON_INGOT) && armorType(ITEM_IRON_BOOTS)==3);
+	CHECK(itemMaxStack(ITEM_IRON_HELMET)==1 && !survivalCanPlace(ITEM_IRON_HELMET));
+	CHECK(survivalToolDurability(ITEM_IRON_HELMET)==133 && survivalToolDurability(ITEM_IRON_HELMET+1)==193
+	   && survivalToolDurability(ITEM_IRON_HELMET+2)==181 && survivalToolDurability(ITEM_IRON_BOOTS)==157);
+
+	setup(true,false);
+	/* recipes (Beta): 5, 8, 7 and 4 ingots */
+	inventoryOpen(true);
+	clearGrid(); for(n=0;n<3;n++) put(n,ITEM_IRON_INGOT,1); put(3,ITEM_IRON_INGOT,1); put(5,ITEM_IRON_INGOT,1);
+	CHECK(result(ITEM_IRON_HELMET,1));
+	clearGrid(); for(n=3;n<9;n++) put(n,ITEM_IRON_INGOT,1); put(0,ITEM_IRON_INGOT,1); put(2,ITEM_IRON_INGOT,1);
+	CHECK(result(ITEM_IRON_HELMET+1,1));
+	clearGrid(); for(n=0;n<3;n++) put(n,ITEM_IRON_INGOT,1); put(3,ITEM_IRON_INGOT,1); put(5,ITEM_IRON_INGOT,1); put(6,ITEM_IRON_INGOT,1); put(8,ITEM_IRON_INGOT,1);
+	CHECK(result(ITEM_IRON_HELMET+2,1));
+	clearGrid(); put(3,ITEM_IRON_INGOT,1); put(5,ITEM_IRON_INGOT,1); put(6,ITEM_IRON_INGOT,1); put(8,ITEM_IRON_INGOT,1);
+	CHECK(result(ITEM_IRON_BOOTS,1));
+	clearGrid(); put(3,ITEM_IRON_ORE,1); put(5,ITEM_IRON_ORE,1); put(6,ITEM_IRON_ORE,1); put(8,ITEM_IRON_ORE,1);
+	CHECK(noResult());
+	clearGrid();
+	inventoryClose();
+
+	/* the inventory screen's armour slots: each takes only its own piece */
+	inventoryOpen(false);
+	CHECK(inventorySlot(SLOT_ARMOR)==armorSlot(0) && inventorySlot(SLOT_ARMOR+3)==armorSlot(3));
+	CHECK(inventorySlotAt(55+1,34+1)==SLOT_ARMOR && inventorySlotAt(55+8,34+18*3+8)==SLOT_ARMOR+3);
+	inventoryAdd(ITEM_IRON_HELMET+1,1,0);                       /* slot 0: a chestplate */
+	inventoryAdd(ITEM_IRON_HELMET,1,0);                         /* slot 1: a helmet */
+	inventoryClick(0,false,false);
+	inventoryClick(SLOT_ARMOR,false,false);                     /* a chestplate on the head: no */
+	CHECK(emptyStack(armorSlot(0)) && is(inventoryHeld(),ITEM_IRON_HELMET+1,1));
+	inventoryClick(SLOT_ARMOR+1,false,false);
+	CHECK(is(armorSlot(1),ITEM_IRON_HELMET+1,1) && emptyStack(inventoryHeld()));
+	inventoryClick(1,false,false);
+	inventoryClick(SLOT_ARMOR,false,false);
+	CHECK(is(armorSlot(0),ITEM_IRON_HELMET,1));
+	/* the same piece does not swap with the worn one (Beta: same item, nothing to merge) */
+	inventoryAdd(ITEM_IRON_HELMET,1,40);
+	for(n=0;n<INV_SLOTS && slot(n)->item!=ITEM_IRON_HELMET;n++);
+	inventoryClick(n,false,false);
+	inventoryClick(SLOT_ARMOR,false,false);
+	CHECK(is(armorSlot(0),ITEM_IRON_HELMET,1) && armorSlot(0)->wear==0 && is(inventoryHeld(),ITEM_IRON_HELMET,1) && inventoryHeld()->wear==40);
+	inventoryClick(n,false,false);
+	/* dragging a piece over slots only fills the one that takes it */
+	inventoryAdd(ITEM_IRON_BOOTS,1,0);
+	for(n=0;n<INV_SLOTS && slot(n)->item!=ITEM_IRON_BOOTS;n++);
+	inventoryClick(n,false,false);
+	inventoryPress(SLOT_ARMOR+2,false,false);
+	inventoryDragOver(SLOT_ARMOR+3);
+	inventoryRelease(SLOT_ARMOR+3);
+	CHECK(emptyStack(armorSlot(2)) && is(armorSlot(3),ITEM_IRON_BOOTS,1) && emptyStack(inventoryHeld()));
+	/* shift takes a piece off, into the main inventory */
+	inventoryClick(SLOT_ARMOR+3,false,true);
+	CHECK(emptyStack(armorSlot(3)) && inventoryCount(ITEM_IRON_BOOTS)==1);
+	for(n=INV_HOTBAR;n<INV_SLOTS && slot(n)->item!=ITEM_IRON_BOOTS;n++);
+	CHECK(n<INV_SLOTS);
+	inventoryClick(n,false,false); inventoryClick(SLOT_ARMOR+3,false,false);
+	inventoryClose();
+	/* the crafting table screen has no armour slots */
+	inventoryOpen(true);
+	CHECK(inventorySlotAt(55+1,34+1)!=SLOT_ARMOR);
+	inventoryClose();
+
+	/* armour value: points by piece (3, 8, 6, 3), as much as each has left */
+	memset(armorSlot(0),0,4*sizeof(stack_struct));
+	CHECK(survivalArmorValue()==0);
+	armorSlot(0)->item=ITEM_IRON_HELMET; armorSlot(0)->count=1;
+	CHECK(survivalArmorValue()==3);
+	for(n=1;n<4;n++){ armorSlot(n)->item=ITEM_IRON_HELMET+n; armorSlot(n)->count=1; }
+	CHECK(survivalArmorValue()==20);
+	memset(armorSlot(0),0,4*sizeof(stack_struct));
+	armorSlot(1)->item=ITEM_IRON_HELMET+1; armorSlot(1)->count=1; armorSlot(1)->wear=96;
+	CHECK(survivalArmorValue()==((8-1)*96)/192+1);
+	armorSlot(1)->wear=0;
+
+	/* damage: 4% less per point, the fraction carried over; the pieces wear */
+	for(n=0;n<4;n++){ armorSlot(n)->item=ITEM_IRON_HELMET+n; armorSlot(n)->count=1; armorSlot(n)->wear=0; }
+	k=health();
+	survivalDamage(10);                                       /* 10 * 5/25 = 2 */
+	CHECK(health()==k-2);
+	for(n=0;n<4;n++) CHECK(armorSlot(n)->wear==2);           /* a quarter of the hit */
+	k=health();
+	for(n=0;n<4;n++) survivalDamage(1);                      /* 4 * 5/25: not yet a point */
+	CHECK(health()==k);
+	survivalDamage(1);                                        /* the fifth makes one */
+	CHECK(health()==k-1);
+	CHECK(armorSlot(0)->wear==2+5);                           /* at least 1 each hit */
+	/* the bar on the screen, right to left */
+	survivalUpdateHUD(false);
+	CHECK(oamSub.oamMemory[30+SURVIVAL_HEARTS].attribute[0]!=ATTR0_DISABLED);
+	/* worn out: the piece breaks */
+	armorSlot(3)->wear=survivalToolDurability(ITEM_IRON_BOOTS)-1;
+	survivalDamage(4);
+	CHECK(emptyStack(armorSlot(3)));
+	/* without armour the damage is whole */
+	memset(armorSlot(0),0,4*sizeof(stack_struct));
+	k=health();
+	survivalDamage(3);
+	CHECK(health()==k-3);
+	survivalUpdateHUD(false);
+	CHECK(oamSub.oamMemory[30+SURVIVAL_HEARTS].attribute[0]==ATTR0_DISABLED);
+	survivalKill();
+
+	/* a version 3 save (before armour) keeps everything and wears nothing */
+	setup(true,false);
+	inventoryAdd(ITEM_IRON_INGOT,7,0);
+	{
+		survivalSave_struct* s=S();
+		u32 sum;
+		s->version=3;
+		memset(s->armor,0xAB,sizeof(s->armor));               /* whatever lay there */
+		sum=checksumBytes((u8*)s,offsetof(survivalSave_struct,armor));
+		memcpy((u8*)s+offsetof(survivalSave_struct,armor),&sum,sizeof(sum));
+	}
+	survivalKill();
+	survivalInitSprites(30);
+	survivalInit(&map,&Player);
+	CHECK(survivalEnabled() && S()->version==SURVIVAL_VERSION && inventoryCount(ITEM_IRON_INGOT)==7);
+	for(n=0;n<4;n++) CHECK(emptyStack(armorSlot(n)));
+	survivalKill();
+}
+
 int main(void)
 {
 	testHealth();
@@ -1673,6 +1800,7 @@ int main(void)
 	testPlants();
 	testFarm();
 	testIron();
+	testArmor();
 	printf(failures?"%d FAILURES\n":"all survival tests passed\n",failures);
 	return failures!=0;
 }

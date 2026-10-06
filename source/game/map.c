@@ -963,6 +963,12 @@ void loadBlockTextures(bool spr, bool tex)
 		}
 		if(spr)getIcon(buff,ITEM_IRON_INGOT,7,1);
 		processTile(buff,7,1,IRON_INGOT_TILE);
+		// iron armour: column 2, helmet to boots (their ids are past the icons' room: icons 52..55)
+		for(i=0;i<4;i++)
+		{
+			if(spr)getIcon(buff,ARMOR_ICON_SLOT+i,2,i);
+			processTile(buff,2,i,ARMOR_TILE+i);
+		}
 		free(buff);
 	}
 
@@ -977,6 +983,17 @@ void loadBlockTextures(bool spr, bool tex)
 	if(buffer)LodePNG_Decoder_decode(&decoder, &image, &imagesize, buffer, buffersize);
 	if(buffer && !decoder.error && image)inventoryLoadFurnaceGui(image,decoder.infoPng.width,decoder.infoPng.height);
 	else inventoryLoadFurnaceGui(NULL,0,0);
+	free(image);
+	free(buffer);
+	LodePNG_Decoder_cleanup(&decoder);
+
+	// the armour bar's pictures
+	image=NULL; buffer=NULL;
+	LodePNG_loadFile(&buffer, &buffersize, "icons.png");
+	LodePNG_Decoder_init(&decoder);
+	if(buffer)LodePNG_Decoder_decode(&decoder, &image, &imagesize, buffer, buffersize);
+	if(buffer && !decoder.error && image)survivalLoadArmorIcons(image,decoder.infoPng.width,decoder.infoPng.height);
+	else survivalLoadArmorIcons(NULL,0,0);
 	free(image);
 	free(buffer);
 	LodePNG_Decoder_cleanup(&decoder);
